@@ -412,7 +412,7 @@ const App = {
                                 <td class="px-4 py-3 text-gray-600 text-sm">${p.headcount}명</td>
                                 <td class="px-4 py-3">
                                     <button class="view-applicants-btn text-primary-500 font-medium hover:underline" data-posting-id="${p.id}">
-                                        보기
+                                        ${p.applicant_count || 0}명 보기
                                     </button>
                                 </td>
                                 <td class="px-4 py-3 text-gray-600 text-sm">${p.end_date || '-'}</td>
@@ -821,6 +821,9 @@ const App = {
                                         ${u.id !== this.state.currentUser.id ? `
                                             <button class="toggle-user-btn p-2 hover:bg-gray-100 rounded ${u.is_active ? 'text-red-500' : 'text-green-500'}" data-user-id="${u.id}" data-active="${u.is_active}" title="${u.is_active ? '비활성화' : '활성화'}">
                                                 <i class="fas fa-${u.is_active ? 'ban' : 'check'}"></i>
+                                            </button>
+                                            <button class="delete-user-btn p-2 hover:bg-gray-100 rounded text-red-500" data-user-id="${u.id}" data-user-name="${escapeHtml(u.name)}" title="삭제">
+                                                <i class="fas fa-trash"></i>
                                             </button>
                                         ` : ''}
                                     </div>
@@ -1278,6 +1281,25 @@ const App = {
                         this.render();
                     } else {
                         alert(`${action}에 실패했습니다.`);
+                    }
+                    this.showLoading(false);
+                }
+            };
+        });
+
+        // 사용자 삭제
+        document.querySelectorAll('.delete-user-btn').forEach(el => {
+            el.onclick = async () => {
+                const userName = el.dataset.userName;
+                if (confirm(`"${userName}" 사용자를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) {
+                    this.showLoading(true);
+                    const result = await Auth.deleteUser(el.dataset.userId);
+                    if (result.success) {
+                        alert('사용자가 삭제되었습니다.');
+                        await this.loadData();
+                        this.render();
+                    } else {
+                        alert('삭제에 실패했습니다: ' + result.error);
                     }
                     this.showLoading(false);
                 }

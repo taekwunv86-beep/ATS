@@ -244,6 +244,38 @@ const Auth = {
         }
     },
 
+    // 사용자 삭제 (슈퍼관리자 전용 - Edge Function 사용)
+    async deleteUser(userId) {
+        try {
+            // 현재 세션 토큰 가져오기
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) {
+                return { success: false, error: '로그인이 필요합니다.' };
+            }
+
+            // Edge Function 호출
+            const response = await fetch(`${SUPABASE_URL}/functions/v1/delete-user`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ userId: userId })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                return { success: false, error: result.error || `HTTP ${response.status} 에러` };
+            }
+
+            return { success: true, message: result.message };
+        } catch (err) {
+            console.error('사용자 삭제 실패:', err);
+            return { success: false, error: `네트워크 오류: ${err.message}` };
+        }
+    },
+
     // 권한 확인
     canAccess(requiredRoles) {
         if (!this.currentProfile) return false;

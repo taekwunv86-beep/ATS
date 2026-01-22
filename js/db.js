@@ -70,16 +70,23 @@ const DB = {
     // 공고 관리
     // =====================================================
 
-    // 모든 공고 조회
+    // 모든 공고 조회 (지원자 수 포함)
     async getPostings() {
         try {
             const { data, error } = await supabaseClient
                 .from('postings')
-                .select('*')
+                .select('*, applicants(count)')
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
-            return { success: true, data };
+
+            // 지원자 수를 applicant_count 필드로 추가
+            const postingsWithCount = data.map(p => ({
+                ...p,
+                applicant_count: p.applicants?.[0]?.count || 0
+            }));
+
+            return { success: true, data: postingsWithCount };
         } catch (err) {
             console.error('공고 목록 조회 실패:', err);
             return { success: false, error: err.message, data: [] };
