@@ -153,6 +153,8 @@ const Auth = {
                 return { success: false, error: '로그인이 필요합니다.' };
             }
 
+            console.log('Edge Function 호출 시작:', `${SUPABASE_URL}/functions/v1/change-password`);
+
             // Edge Function 호출
             const response = await fetch(`${SUPABASE_URL}/functions/v1/change-password`, {
                 method: 'POST',
@@ -166,16 +168,25 @@ const Auth = {
                 })
             });
 
-            const result = await response.json();
+            console.log('Edge Function 응답 상태:', response.status);
+
+            let result;
+            try {
+                result = await response.json();
+                console.log('Edge Function 응답:', result);
+            } catch (parseError) {
+                console.error('JSON 파싱 실패:', parseError);
+                return { success: false, error: 'Edge Function 응답 파싱 실패' };
+            }
 
             if (!response.ok) {
-                throw new Error(result.error || '비밀번호 변경에 실패했습니다.');
+                return { success: false, error: result.error || `HTTP ${response.status} 에러` };
             }
 
             return { success: true, message: result.message };
         } catch (err) {
             console.error('사용자 비밀번호 변경 실패:', err);
-            return { success: false, error: err.message };
+            return { success: false, error: `네트워크 오류: ${err.message}` };
         }
     },
 
