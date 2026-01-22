@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATS 데이터 마이그레이션 도구</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        .log-entry { padding: 4px 8px; border-radius: 4px; margin: 2px 0; }
+        .log-info { background: #e0f2fe; color: #0369a1; }
+        .log-success { background: #dcfce7; color: #16a34a; }
+        .log-error { background: #fee2e2; color: #dc2626; }
+        .log-warning { background: #fef3c7; color: #d97706; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-8">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">ATS 데이터 마이그레이션 도구</h1>
+        <p class="text-gray-600 mb-8">기존 localStorage 데이터를 Supabase로 마이그레이션합니다.</p>
+
+        <!-- Supabase 설정 -->
+        <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">1. Supabase 설정</h2>
+            <div class="grid grid-cols-1 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Supabase URL</label>
+                    <input type="text" id="supabaseUrl" class="w-full px-4 py-2 border rounded-lg" placeholder="https://your-project.supabase.co">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Service Role Key (마이그레이션용)</label>
+                    <input type="password" id="supabaseKey" class="w-full px-4 py-2 border rounded-lg" placeholder="eyJ...">
+                    <p class="text-xs text-gray-500 mt-1">주의: Service Role Key는 관리자 권한이 있습니다. 안전하게 관리하세요.</p>
+                </div>
+                <button id="connectBtn" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                    Supabase 연결 테스트
+                </button>
+            </div>
+        </div>
+
+        <!-- 데이터 내보내기 -->
+        <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">2. 기존 데이터 확인</h2>
+            <p class="text-gray-600 mb-4">현재 localStorage에 저장된 데이터를 확인합니다.</p>
+            <div class="grid grid-cols-4 gap-4 mb-4">
+                <div class="p-4 bg-gray-50 rounded-lg text-center">
+                    <p class="text-2xl font-bold text-blue-600" id="userCount">0</p>
+                    <p class="text-sm text-gray-500">사용자</p>
+                </div>
+                <div class="p-4 bg-gray-50 rounded-lg text-center">
+                    <p class="text-2xl font-bold text-green-600" id="postingCount">0</p>
+                    <p class="text-sm text-gray-500">공고</p>
+                </div>
+                <div class="p-4 bg-gray-50 rounded-lg text-center">
+                    <p class="text-2xl font-bold text-purple-600" id="applicantCount">0</p>
+                    <p class="text-sm text-gray-500">지원자</p>
+                </div>
+                <div class="p-4 bg-gray-50 rounded-lg text-center">
+                    <p class="text-2xl font-bold text-orange-600" id="interviewCount">0</p>
+                    <p class="text-sm text-gray-500">면접</p>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button id="loadDataBtn" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600">
+                    데이터 불러오기
+                </button>
+                <button id="exportBtn" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">
+                    JSON으로 내보내기
+                </button>
+            </div>
+        </div>
+
+        <!-- 마이그레이션 실행 -->
+        <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">3. 마이그레이션 실행</h2>
+            <div class="space-y-3 mb-4">
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" id="migratePostings" checked class="rounded">
+                    <span>공고 데이터 마이그레이션</span>
+                </label>
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" id="migrateApplicants" checked class="rounded">
+                    <span>지원자 데이터 마이그레이션</span>
+                </label>
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" id="migrateInterviews" checked class="rounded">
+                    <span>면접 데이터 마이그레이션</span>
+                </label>
+            </div>
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                <p class="text-yellow-800 text-sm">
+                    <strong>주의:</strong> 마이그레이션 전에 Supabase에서 사용자를 먼저 생성하고,
+                    created_by 및 assigned_users 필드의 UUID를 수동으로 매핑해야 합니다.
+                    사용자 마이그레이션은 Supabase Auth를 통해 별도로 진행해야 합니다.
+                </p>
+            </div>
+            <button id="migrateBtn" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">
+                마이그레이션 시작
+            </button>
+        </div>
+
+        <!-- 로그 -->
+        <div class="bg-white rounded-xl shadow-sm p-6">
+            <h2 class="text-xl font-semibold mb-4">로그</h2>
+            <div id="logContainer" class="h-64 overflow-auto bg-gray-900 text-gray-100 p-4 rounded-lg font-mono text-sm">
+                <p class="text-gray-500">마이그레이션 로그가 여기에 표시됩니다...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 데이터 저장소
+        let localData = {
+            users: [],
+            postings: [],
+            applicants: [],
+            interviews: []
+        };
+
+        let supabaseClient = null;
+
+        // 로그 함수
+        function log(message, type = 'info') {
+            const container = document.getElementById('logContainer');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // localStorage 데이터 로드
+        function loadLocalData() {
+            const get = (key) => {
+                const data = localStorage.getItem('ats_' + key);
+                return data ? JSON.parse(data) : [];
+            };
+
+            localData.users = get('users') || [];
+            localData.postings = get('postings') || [];
+            localData.applicants = get('applicants') || [];
+            localData.interviews = get('interviews') || [];
+
+            document.getElementById('userCount').textContent = localData.users.length;
+            document.getElementById('postingCount').textContent = localData.postings.length;
+            document.getElementById('applicantCount').textContent = localData.applicants.length;
+            document.getElementById('interviewCount').textContent = localData.interviews.length;
+
+            log(`데이터 로드 완료: 사용자 ${localData.users.length}명, 공고 ${localData.postings.length}개, 지원자 ${localData.applicants.length}명, 면접 ${localData.interviews.length}개`, 'success');
+        }
+
+        // JSON 내보내기
+        function exportData() {
+            const data = JSON.stringify(localData, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ats-backup-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            log('데이터를 JSON 파일로 내보냈습니다.', 'success');
+        }
+
+        // Supabase 연결
+        async function connectSupabase() {
+            const url = document.getElementById('supabaseUrl').value;
+            const key = document.getElementById('supabaseKey').value;
+
+            if (!url || !key) {
+                log('Supabase URL과 Key를 입력하세요.', 'error');
+                return;
+            }
+
+            try {
+                supabaseClient = supabase.createClient(url, key);
+
+                // 연결 테스트
+                const { data, error } = await supabaseClient.from('profiles').select('count').limit(1);
+
+                if (error) throw error;
+
+                log('Supabase 연결 성공!', 'success');
+            } catch (err) {
+                log(`Supabase 연결 실패: ${err.message}`, 'error');
+                supabaseClient = null;
+            }
+        }
+
+        // 마이그레이션 실행
+        async function runMigration() {
+            if (!supabaseClient) {
+                log('먼저 Supabase에 연결하세요.', 'error');
+                return;
+            }
+
+            const migratePostings = document.getElementById('migratePostings').checked;
+            const migrateApplicants = document.getElementById('migrateApplicants').checked;
+            const migrateInterviews = document.getElementById('migrateInterviews').checked;
+
+            log('마이그레이션 시작...', 'info');
+
+            // ID 매핑 (기존 ID -> 새 ID)
+            const postingIdMap = {};
+            const applicantIdMap = {};
+
+            // 공고 마이그레이션
+            if (migratePostings && localData.postings.length > 0) {
+                log(`공고 ${localData.postings.length}개 마이그레이션 중...`, 'info');
+
+                for (const posting of localData.postings) {
+                    try {
+                        const { data, error } = await supabaseClient
+                            .from('postings')
+                            .insert({
+                                title: posting.title,
+                                department: posting.department,
+                                headcount: posting.headcount,
+                                status: posting.status,
+                                start_date: posting.startDate || null,
+                                end_date: posting.endDate || null,
+                                description: posting.description,
+                                // created_by는 실제 UUID로 매핑 필요
+                                // assigned_users도 실제 UUID 배열로 매핑 필요
+                            })
+                            .select()
+                            .single();
+
+                        if (error) throw error;
+
+                        postingIdMap[posting.id] = data.id;
+                        log(`공고 "${posting.title}" 마이그레이션 완료 (${posting.id} -> ${data.id})`, 'success');
+                    } catch (err) {
+                        log(`공고 "${posting.title}" 마이그레이션 실패: ${err.message}`, 'error');
+                    }
+                }
+            }
+
+            // 지원자 마이그레이션
+            if (migrateApplicants && localData.applicants.length > 0) {
+                log(`지원자 ${localData.applicants.length}명 마이그레이션 중...`, 'info');
+
+                for (const applicant of localData.applicants) {
+                    try {
+                        const newPostingId = postingIdMap[applicant.postingId];
+                        if (!newPostingId) {
+                            log(`지원자 "${applicant.name}"의 공고 ID를 찾을 수 없습니다.`, 'warning');
+                            continue;
+                        }
+
+                        const { data, error } = await supabaseClient
+                            .from('applicants')
+                            .insert({
+                                posting_id: newPostingId,
+                                name: applicant.name,
+                                email: applicant.email,
+                                phone: applicant.phone,
+                                education: applicant.education,
+                                experience: applicant.experience,
+                                desired_salary: applicant.desiredSalary,
+                                source: applicant.source,
+                                status: applicant.status,
+                                applied_at: applicant.appliedAt || null,
+                                notes: applicant.notes
+                            })
+                            .select()
+                            .single();
+
+                        if (error) throw error;
+
+                        applicantIdMap[applicant.id] = data.id;
+                        log(`지원자 "${applicant.name}" 마이그레이션 완료`, 'success');
+                    } catch (err) {
+                        log(`지원자 "${applicant.name}" 마이그레이션 실패: ${err.message}`, 'error');
+                    }
+                }
+            }
+
+            // 면접 마이그레이션
+            if (migrateInterviews && localData.interviews.length > 0) {
+                log(`면접 ${localData.interviews.length}개 마이그레이션 중...`, 'info');
+
+                for (const interview of localData.interviews) {
+                    try {
+                        const newApplicantId = applicantIdMap[interview.applicantId];
+                        const newPostingId = postingIdMap[interview.postingId];
+
+                        if (!newApplicantId || !newPostingId) {
+                            log(`면접 데이터의 ID를 매핑할 수 없습니다.`, 'warning');
+                            continue;
+                        }
+
+                        const { error } = await supabaseClient
+                            .from('interviews')
+                            .insert({
+                                applicant_id: newApplicantId,
+                                posting_id: newPostingId,
+                                type: interview.type,
+                                date: interview.date || null,
+                                time: interview.time || null,
+                                duration: interview.duration,
+                                location: interview.location,
+                                interviewers: interview.interviewers,
+                                notes: interview.notes,
+                                status: interview.status
+                            });
+
+                        if (error) throw error;
+
+                        log(`면접 마이그레이션 완료`, 'success');
+                    } catch (err) {
+                        log(`면접 마이그레이션 실패: ${err.message}`, 'error');
+                    }
+                }
+            }
+
+            log('마이그레이션 완료!', 'success');
+            log('주의: 첨부파일은 별도로 마이그레이션해야 합니다.', 'warning');
+        }
+
+        // 이벤트 바인딩
+        document.getElementById('loadDataBtn').onclick = loadLocalData;
+        document.getElementById('exportBtn').onclick = exportData;
+        document.getElementById('connectBtn').onclick = connectSupabase;
+        document.getElementById('migrateBtn').onclick = runMigration;
+
+        // 초기 데이터 로드
+        loadLocalData();
+    </script>
+</body>
+</html>

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>채용관리 시스템 (ATS)</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#fef2f2',
+                            100: '#fee2e2',
+                            200: '#fecaca',
+                            300: '#fca5a5',
+                            400: '#f87171',
+                            500: '#E31B23',
+                            600: '#C9181F',
+                            700: '#A3151A',
+                            800: '#7D1015',
+                            900: '#570B0F',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- External Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        .sidebar { transition: transform 0.3s ease; }
+        .modal { transition: opacity 0.2s ease; }
+        .status-badge { padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 500; }
+        .status-received { background: #e5e7eb; color: #374151; }
+        .status-reviewing { background: #fee2e2; color: #E31B23; }
+        .status-interview1 { background: #fecaca; color: #C9181F; }
+        .status-interview2 { background: #fca5a5; color: #A3151A; }
+        .status-passed { background: #dcfce7; color: #16a34a; }
+        .status-failed { background: #e5e7eb; color: #6b7280; }
+        .table-row:hover { background: #f8fafc; }
+        .nav-item.active { background: #E31B23; color: white; }
+        .nav-item:hover:not(.active) { background: #f1f5f9; }
+        [x-cloak] { display: none !important; }
+
+        /* 로딩 애니메이션 */
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- App Container -->
+    <div id="app">
+        <!-- 초기 로딩 화면 -->
+        <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-500 to-primary-800">
+            <div class="text-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+                <p class="text-white">로딩 중...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Supabase 환경 변수 설정 -->
+    <script>
+        // =====================================================
+        // Supabase 설정
+        // 아래 값들을 실제 Supabase 프로젝트 정보로 교체하세요
+        // =====================================================
+        window.SUPABASE_URL = 'https://rmjmgxxjgcysketokxiq.supabase.co';
+        window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtam1neHhqZ2N5c2tldG9reGlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg4OTU1ODgsImV4cCI6MjA4NDQ3MTU4OH0.iaQBNlIWvcavn0aEjAefz0F_sPUkMPEPbqH7BEGwrWk';
+    </script>
+
+    <!-- Application Scripts -->
+    <script src="js/supabase.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/db.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

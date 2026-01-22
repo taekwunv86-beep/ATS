@@ -1,0 +1,513 @@
+// =====================================================
+// Database CRUD Module
+// Supabase 데이터베이스 CRUD 작업
+// =====================================================
+
+const DB = {
+    // =====================================================
+    // 사용자 관리
+    // =====================================================
+
+    // 모든 사용자 조회
+    async getUsers() {
+        try {
+            const { data, error } = await supabaseClient
+                .from('profiles')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('사용자 목록 조회 실패:', err);
+            return { success: false, error: err.message, data: [] };
+        }
+    },
+
+    // 사용자 생성 (슈퍼관리자 전용 - Supabase Admin API 필요)
+    async createUser(userData) {
+        try {
+            // 참고: 실제 사용자 생성은 Supabase Admin API를 통해 서버 사이드에서 처리해야 함
+            // 여기서는 프로필만 업데이트하는 용도로 사용
+            const { data, error } = await supabaseClient
+                .from('profiles')
+                .insert(userData)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('사용자 생성 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 사용자 업데이트
+    async updateUser(userId, updates) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('profiles')
+                .update(updates)
+                .eq('id', userId)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('사용자 업데이트 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 사용자 활성/비활성 토글
+    async toggleUserActive(userId, isActive) {
+        return this.updateUser(userId, { is_active: isActive });
+    },
+
+    // =====================================================
+    // 공고 관리
+    // =====================================================
+
+    // 모든 공고 조회
+    async getPostings() {
+        try {
+            const { data, error } = await supabaseClient
+                .from('postings')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('공고 목록 조회 실패:', err);
+            return { success: false, error: err.message, data: [] };
+        }
+    },
+
+    // 단일 공고 조회
+    async getPosting(id) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('postings')
+                .select('*')
+                .eq('id', id)
+                .single();
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('공고 조회 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 공고 생성
+    async createPosting(postingData) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('postings')
+                .insert({
+                    ...postingData,
+                    created_by: Auth.currentUser?.id
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('공고 생성 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 공고 업데이트
+    async updatePosting(id, updates) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('postings')
+                .update(updates)
+                .eq('id', id)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('공고 업데이트 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 공고 삭제
+    async deletePosting(id) {
+        try {
+            const { error } = await supabaseClient
+                .from('postings')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            return { success: true };
+        } catch (err) {
+            console.error('공고 삭제 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 공고 복제
+    async duplicatePosting(id) {
+        try {
+            const { data: original } = await this.getPosting(id);
+            if (!original) throw new Error('원본 공고를 찾을 수 없습니다.');
+
+            const newPosting = {
+                title: original.title + ' (복사본)',
+                department: original.department,
+                headcount: original.headcount,
+                status: 'draft',
+                start_date: original.start_date,
+                end_date: original.end_date,
+                description: original.description,
+                assigned_users: original.assigned_users
+            };
+
+            return this.createPosting(newPosting);
+        } catch (err) {
+            console.error('공고 복제 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // =====================================================
+    // 지원자 관리
+    // =====================================================
+
+    // 공고별 지원자 조회
+    async getApplicants(postingId) {
+        try {
+            let query = supabaseClient
+                .from('applicants')
+                .select(`
+                    *,
+                    attachments (*)
+                `)
+                .order('created_at', { ascending: false });
+
+            if (postingId) {
+                query = query.eq('posting_id', postingId);
+            }
+
+            const { data, error } = await query;
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('지원자 목록 조회 실패:', err);
+            return { success: false, error: err.message, data: [] };
+        }
+    },
+
+    // 단일 지원자 조회
+    async getApplicant(id) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('applicants')
+                .select(`
+                    *,
+                    attachments (*)
+                `)
+                .eq('id', id)
+                .single();
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('지원자 조회 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 지원자 생성
+    async createApplicant(applicantData) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('applicants')
+                .insert(applicantData)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('지원자 생성 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 여러 지원자 일괄 생성 (엑셀 업로드용)
+    async createApplicants(applicantsData) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('applicants')
+                .insert(applicantsData)
+                .select();
+
+            if (error) throw error;
+            return { success: true, data, count: data.length };
+        } catch (err) {
+            console.error('지원자 일괄 생성 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 지원자 업데이트
+    async updateApplicant(id, updates) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('applicants')
+                .update(updates)
+                .eq('id', id)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('지원자 업데이트 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 지원자 상태 일괄 변경
+    async updateApplicantsStatus(ids, status) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('applicants')
+                .update({ status })
+                .in('id', ids)
+                .select();
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('지원자 상태 일괄 변경 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 지원자 삭제
+    async deleteApplicant(id) {
+        try {
+            const { error } = await supabaseClient
+                .from('applicants')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            return { success: true };
+        } catch (err) {
+            console.error('지원자 삭제 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 공고의 모든 지원자 삭제
+    async deleteApplicantsByPosting(postingId) {
+        try {
+            const { error } = await supabaseClient
+                .from('applicants')
+                .delete()
+                .eq('posting_id', postingId);
+
+            if (error) throw error;
+            return { success: true };
+        } catch (err) {
+            console.error('지원자 일괄 삭제 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 지원자 수 조회
+    async getApplicantCount(postingId) {
+        try {
+            const { count, error } = await supabaseClient
+                .from('applicants')
+                .select('*', { count: 'exact', head: true })
+                .eq('posting_id', postingId);
+
+            if (error) throw error;
+            return count || 0;
+        } catch (err) {
+            console.error('지원자 수 조회 실패:', err);
+            return 0;
+        }
+    },
+
+    // =====================================================
+    // 면접 관리
+    // =====================================================
+
+    // 면접 목록 조회
+    async getInterviews(postingId = null) {
+        try {
+            let query = supabaseClient
+                .from('interviews')
+                .select(`
+                    *,
+                    applicants (name, email, phone)
+                `)
+                .order('date', { ascending: true });
+
+            if (postingId) {
+                query = query.eq('posting_id', postingId);
+            }
+
+            const { data, error } = await query;
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('면접 목록 조회 실패:', err);
+            return { success: false, error: err.message, data: [] };
+        }
+    },
+
+    // 면접 생성
+    async createInterview(interviewData) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('interviews')
+                .insert(interviewData)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('면접 생성 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 면접 업데이트
+    async updateInterview(id, updates) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('interviews')
+                .update(updates)
+                .eq('id', id)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('면접 업데이트 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 면접 삭제
+    async deleteInterview(id) {
+        try {
+            const { error } = await supabaseClient
+                .from('interviews')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            return { success: true };
+        } catch (err) {
+            console.error('면접 삭제 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // =====================================================
+    // 첨부파일 메타데이터 관리
+    // =====================================================
+
+    // 첨부파일 메타데이터 생성
+    async createAttachment(attachmentData) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('attachments')
+                .insert(attachmentData)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('첨부파일 메타데이터 생성 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 첨부파일 메타데이터 삭제
+    async deleteAttachment(id) {
+        try {
+            const { error } = await supabaseClient
+                .from('attachments')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            return { success: true };
+        } catch (err) {
+            console.error('첨부파일 메타데이터 삭제 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 지원자의 첨부파일 목록 조회
+    async getAttachments(applicantId) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('attachments')
+                .select('*')
+                .eq('applicant_id', applicantId)
+                .order('uploaded_at', { ascending: false });
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('첨부파일 목록 조회 실패:', err);
+            return { success: false, error: err.message, data: [] };
+        }
+    },
+
+    // =====================================================
+    // 유틸리티 함수
+    // =====================================================
+
+    // 상태명 변환
+    getStatusName(status) {
+        const names = {
+            received: '서류접수',
+            reviewing: '서류심사',
+            interview1: '1차면접',
+            interview2: '2차면접',
+            passed: '합격',
+            failed: '불합격'
+        };
+        return names[status] || status;
+    },
+
+    // 공고 상태명 변환
+    getPostingStatusName(status) {
+        const names = {
+            draft: '작성중',
+            open: '진행중',
+            closed: '마감',
+            completed: '완료'
+        };
+        return names[status] || status;
+    }
+};
+
+// Export
+window.DB = DB;
