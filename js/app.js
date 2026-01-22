@@ -2270,7 +2270,7 @@ const App = {
             { '항목': '이메일', '설명': '로그인에 사용할 이메일 주소 (필수)', '예시': 'hong@example.com' },
             { '항목': '비밀번호', '설명': '초기 비밀번호, 최소 6자 이상 (필수)', '예시': 'password123' },
             { '항목': '부서', '설명': '소속 부서 (선택)', '예시': '개발팀' },
-            { '항목': '역할', '설명': 'user(일반사용자), admin(관리자) 중 선택 (선택, 기본값: user)', '예시': 'user' }
+            { '항목': '역할', '설명': 'user(일반사용자), admin(관리자), super_admin(슈퍼관리자) 중 선택 (선택, 기본값: user)', '예시': 'user' }
         ];
 
         const wb = XLSX.utils.book_new();
@@ -2361,8 +2361,8 @@ const App = {
                         continue;
                     }
 
-                    // 역할 검사 (super_admin은 엑셀로 생성 불가)
-                    if (!['user', 'admin'].includes(role)) {
+                    // 역할 검사
+                    if (!['user', 'admin', 'super_admin'].includes(role)) {
                         role = 'user';
                     }
 
