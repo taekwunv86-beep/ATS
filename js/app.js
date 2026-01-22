@@ -3,6 +3,20 @@
 // ATS 시스템 메인 앱 로직
 // =====================================================
 
+// XSS 방지를 위한 HTML 이스케이프 함수
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// 전역으로 사용 가능하도록 export
+window.escapeHtml = escapeHtml;
+
 const App = {
     // 앱 상태
     state: {
@@ -208,7 +222,7 @@ const App = {
 
     renderLoginPage() {
         return `
-            <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-500 to-primary-800">
+            <div class="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-primary-500 to-primary-800">
                 <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md">
                     <div class="text-center mb-8">
                         <img src="tpc_wordmark_fullcolors.png" alt="The Play Company" class="h-10 mx-auto mb-4" onerror="this.style.display='none'">
@@ -227,6 +241,11 @@ const App = {
                         <div id="loginError" class="text-red-500 text-sm hidden">이메일 또는 비밀번호가 올바르지 않습니다.</div>
                         <button type="submit" class="w-full bg-primary-500 text-white py-3 rounded-lg font-semibold hover:bg-primary-600 transition">로그인</button>
                     </form>
+                </div>
+                <div class="mt-6 text-center text-white text-sm">
+                    <a href="privacy.html" class="hover:underline">개인정보 처리방침</a>
+                    <span class="mx-2">|</span>
+                    <a href="terms.html" class="hover:underline">이용약관</a>
                 </div>
             </div>
         `;
@@ -268,8 +287,8 @@ const App = {
                                 <i class="fas fa-user text-gray-500"></i>
                             </div>
                             <div>
-                                <p class="font-medium text-sm">${user.name}</p>
-                                <p class="text-xs text-gray-500">${Auth.getRoleName(user.role)}</p>
+                                <p class="font-medium text-sm">${escapeHtml(user.name)}</p>
+                                <p class="text-xs text-gray-500">${escapeHtml(Auth.getRoleName(user.role))}</p>
                             </div>
                         </div>
                         <button id="logoutBtn" class="w-full px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition">
@@ -387,9 +406,9 @@ const App = {
                         ${postings.map(p => `
                             <tr class="border-t hover:bg-gray-50">
                                 <td class="px-4 py-3">
-                                    <p class="font-medium">${p.title}</p>
+                                    <p class="font-medium">${escapeHtml(p.title)}</p>
                                 </td>
-                                <td class="px-4 py-3 text-gray-600 text-sm">${p.department || '-'}</td>
+                                <td class="px-4 py-3 text-gray-600 text-sm">${escapeHtml(p.department) || '-'}</td>
                                 <td class="px-4 py-3 text-gray-600 text-sm">${p.headcount}명</td>
                                 <td class="px-4 py-3">
                                     <button class="view-applicants-btn text-primary-500 font-medium hover:underline" data-posting-id="${p.id}">
@@ -465,8 +484,8 @@ const App = {
                     <i class="fas fa-arrow-left"></i>
                 </button>
                 <div class="flex-1">
-                    <h2 class="text-lg font-semibold">${posting.title}</h2>
-                    <p class="text-sm text-gray-500">${posting.department || ''} · 모집 ${posting.headcount}명</p>
+                    <h2 class="text-lg font-semibold">${escapeHtml(posting.title)}</h2>
+                    <p class="text-sm text-gray-500">${escapeHtml(posting.department) || ''} · 모집 ${posting.headcount}명</p>
                 </div>
                 ${this.state.selectedApplicants.length > 0 ? `
                 <button id="downloadAttachmentsBtn" class="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm">
@@ -520,11 +539,11 @@ const App = {
                                 <td class="px-3 py-2 text-center">
                                     <input type="checkbox" class="applicant-checkbox w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" data-applicant-id="${a.id}" ${this.state.selectedApplicants.includes(a.id) ? 'checked' : ''}>
                                 </td>
-                                <td class="px-3 py-2 font-medium">${a.name}</td>
-                                <td class="px-3 py-2 text-gray-600">${a.phone || '-'}</td>
-                                <td class="px-3 py-2 text-gray-600">${a.email || '-'}</td>
-                                <td class="px-3 py-2 text-gray-600">${a.education || '-'}</td>
-                                <td class="px-3 py-2 text-gray-600">${a.experience || '-'}</td>
+                                <td class="px-3 py-2 font-medium">${escapeHtml(a.name)}</td>
+                                <td class="px-3 py-2 text-gray-600">${escapeHtml(a.phone) || '-'}</td>
+                                <td class="px-3 py-2 text-gray-600">${escapeHtml(a.email) || '-'}</td>
+                                <td class="px-3 py-2 text-gray-600">${escapeHtml(a.education) || '-'}</td>
+                                <td class="px-3 py-2 text-gray-600">${escapeHtml(a.experience) || '-'}</td>
                                 <td class="px-3 py-2 text-gray-600">${a.applied_at || '-'}</td>
                                 <td class="px-3 py-2">
                                     <select class="applicant-status-select text-xs border rounded px-2 py-1" data-applicant-id="${a.id}">
@@ -593,7 +612,7 @@ const App = {
                     <div class="text-xs font-medium ${isToday ? 'text-primary-600' : ''}">${day}</div>
                     <div class="space-y-0.5 mt-0.5">
                         ${dayInterviews.slice(0, 2).map(i => {
-                            return `<div class="text-xs p-0.5 rounded ${i.type === '1차' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'} truncate">${i.applicants?.name || ''}</div>`;
+                            return `<div class="text-xs p-0.5 rounded ${i.type === '1차' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'} truncate">${escapeHtml(i.applicants?.name) || ''}</div>`;
                         }).join('')}
                         ${dayInterviews.length > 2 ? `<div class="text-xs text-gray-500">+${dayInterviews.length - 2}</div>` : ''}
                     </div>
@@ -633,10 +652,10 @@ const App = {
                         ${upcomingInterviews.length ? upcomingInterviews.map(i => `
                             <div class="p-3 border rounded-lg hover:bg-gray-50">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-sm font-medium">${i.applicants?.name || '알 수 없음'}</span>
-                                    <span class="text-xs px-2 py-0.5 rounded ${i.type === '1차' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}">${i.type}면접</span>
+                                    <span class="text-sm font-medium">${escapeHtml(i.applicants?.name) || '알 수 없음'}</span>
+                                    <span class="text-xs px-2 py-0.5 rounded ${i.type === '1차' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}">${escapeHtml(i.type)}면접</span>
                                 </div>
-                                <p class="text-xs text-gray-500 mt-1">${i.date} ${i.time || ''}</p>
+                                <p class="text-xs text-gray-500 mt-1">${escapeHtml(i.date)} ${escapeHtml(i.time) || ''}</p>
                             </div>
                         `).join('') : '<p class="text-gray-500 text-sm text-center py-4">예정된 면접이 없습니다.</p>'}
                     </div>
@@ -769,12 +788,12 @@ const App = {
                     <tbody>
                         ${users.map(u => `
                             <tr class="border-t hover:bg-gray-50">
-                                <td class="px-4 py-3 font-medium">${u.name}</td>
-                                <td class="px-4 py-3 text-gray-600">${u.email}</td>
-                                <td class="px-4 py-3 text-gray-600">${u.department || '-'}</td>
+                                <td class="px-4 py-3 font-medium">${escapeHtml(u.name)}</td>
+                                <td class="px-4 py-3 text-gray-600">${escapeHtml(u.email)}</td>
+                                <td class="px-4 py-3 text-gray-600">${escapeHtml(u.department) || '-'}</td>
                                 <td class="px-4 py-3">
                                     <span class="text-xs px-2 py-1 rounded ${u.role === 'super_admin' ? 'bg-purple-100 text-purple-700' : u.role === 'admin' ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-700'}">
-                                        ${Auth.getRoleName(u.role)}
+                                        ${escapeHtml(Auth.getRoleName(u.role))}
                                     </span>
                                 </td>
                                 <td class="px-4 py-3">
@@ -811,15 +830,15 @@ const App = {
                 <form id="profileForm" class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">이름</label>
-                        <input type="text" name="name" class="w-full px-4 py-2 border rounded-lg" value="${user.name}" required>
+                        <input type="text" name="name" class="w-full px-4 py-2 border rounded-lg" value="${escapeHtml(user.name)}" required>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">이메일</label>
-                        <input type="email" class="w-full px-4 py-2 border rounded-lg bg-gray-100" value="${user.email}" disabled>
+                        <input type="email" class="w-full px-4 py-2 border rounded-lg bg-gray-100" value="${escapeHtml(user.email)}" disabled>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">부서</label>
-                        <input type="text" name="department" class="w-full px-4 py-2 border rounded-lg" value="${user.department || ''}">
+                        <input type="text" name="department" class="w-full px-4 py-2 border rounded-lg" value="${escapeHtml(user.department) || ''}">
                     </div>
                     <button type="submit" class="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600">
                         저장
@@ -1289,12 +1308,12 @@ const App = {
             <form id="postingForm" class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">공고명 *</label>
-                    <input type="text" name="title" class="w-full px-4 py-2 border rounded-lg" value="${posting?.title || ''}" required>
+                    <input type="text" name="title" class="w-full px-4 py-2 border rounded-lg" value="${escapeHtml(posting?.title) || ''}" required>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">부서</label>
-                        <input type="text" name="department" class="w-full px-4 py-2 border rounded-lg" value="${posting?.department || ''}">
+                        <input type="text" name="department" class="w-full px-4 py-2 border rounded-lg" value="${escapeHtml(posting?.department) || ''}">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">모집인원</label>
@@ -1313,7 +1332,7 @@ const App = {
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">상세내용</label>
-                    <textarea name="description" class="w-full px-4 py-2 border rounded-lg" rows="3">${posting?.description || ''}</textarea>
+                    <textarea name="description" class="w-full px-4 py-2 border rounded-lg" rows="3">${escapeHtml(posting?.description) || ''}</textarea>
                 </div>
             </form>
         `;
@@ -1366,29 +1385,29 @@ const App = {
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">이름 *</label>
-                        <input type="text" name="name" class="w-full px-4 py-2 border rounded-lg" value="${applicant?.name || ''}" required>
+                        <input type="text" name="name" class="w-full px-4 py-2 border rounded-lg" value="${escapeHtml(applicant?.name) || ''}" required>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">연락처</label>
-                        <input type="tel" name="phone" class="w-full px-4 py-2 border rounded-lg" value="${applicant?.phone || ''}" placeholder="010-0000-0000">
+                        <input type="tel" name="phone" class="w-full px-4 py-2 border rounded-lg" value="${escapeHtml(applicant?.phone) || ''}" placeholder="010-0000-0000">
                     </div>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">이메일</label>
-                    <input type="email" name="email" class="w-full px-4 py-2 border rounded-lg" value="${applicant?.email || ''}">
+                    <input type="email" name="email" class="w-full px-4 py-2 border rounded-lg" value="${escapeHtml(applicant?.email) || ''}">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">학력</label>
-                    <input type="text" name="education" class="w-full px-4 py-2 border rounded-lg" value="${applicant?.education || ''}">
+                    <input type="text" name="education" class="w-full px-4 py-2 border rounded-lg" value="${escapeHtml(applicant?.education) || ''}">
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">경력</label>
-                        <input type="text" name="experience" class="w-full px-4 py-2 border rounded-lg" value="${applicant?.experience || ''}" placeholder="예: 3년">
+                        <input type="text" name="experience" class="w-full px-4 py-2 border rounded-lg" value="${escapeHtml(applicant?.experience) || ''}" placeholder="예: 3년">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">희망연봉</label>
-                        <input type="text" name="desired_salary" class="w-full px-4 py-2 border rounded-lg" value="${applicant?.desired_salary || ''}">
+                        <input type="text" name="desired_salary" class="w-full px-4 py-2 border rounded-lg" value="${escapeHtml(applicant?.desired_salary) || ''}">
                     </div>
                 </div>
                 <div>
@@ -1403,7 +1422,7 @@ const App = {
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">메모</label>
-                    <textarea name="notes" class="w-full px-4 py-2 border rounded-lg" rows="2">${applicant?.notes || ''}</textarea>
+                    <textarea name="notes" class="w-full px-4 py-2 border rounded-lg" rows="2">${escapeHtml(applicant?.notes) || ''}</textarea>
                 </div>
             </form>
         `;
@@ -1472,9 +1491,9 @@ const App = {
                                 <i class="fas fa-user text-3xl text-gray-400"></i>
                             </div>
                             <div>
-                                <h3 class="text-2xl font-bold">${applicant.name}</h3>
-                                <p class="text-gray-500">${posting?.title || '알 수 없음'}</p>
-                                <span class="status-badge status-${applicant.status} mt-2 inline-block">${DB.getStatusName(applicant.status)}</span>
+                                <h3 class="text-2xl font-bold">${escapeHtml(applicant.name)}</h3>
+                                <p class="text-gray-500">${escapeHtml(posting?.title) || '알 수 없음'}</p>
+                                <span class="status-badge status-${applicant.status} mt-2 inline-block">${escapeHtml(DB.getStatusName(applicant.status))}</span>
                             </div>
                         </div>
 
@@ -1482,15 +1501,15 @@ const App = {
                             <div>
                                 <h4 class="font-semibold text-gray-700 mb-3">연락처 정보</h4>
                                 <div class="space-y-2 text-sm">
-                                    <p><i class="fas fa-phone w-5 text-gray-400"></i> ${applicant.phone || '-'}</p>
-                                    <p><i class="fas fa-envelope w-5 text-gray-400"></i> ${applicant.email || '-'}</p>
+                                    <p><i class="fas fa-phone w-5 text-gray-400"></i> ${escapeHtml(applicant.phone) || '-'}</p>
+                                    <p><i class="fas fa-envelope w-5 text-gray-400"></i> ${escapeHtml(applicant.email) || '-'}</p>
                                 </div>
                             </div>
                             <div>
                                 <h4 class="font-semibold text-gray-700 mb-3">지원 정보</h4>
                                 <div class="space-y-2 text-sm">
-                                    <p><i class="fas fa-calendar w-5 text-gray-400"></i> 지원일: ${applicant.applied_at || '-'}</p>
-                                    <p><i class="fas fa-link w-5 text-gray-400"></i> 유입경로: ${applicant.source || '-'}</p>
+                                    <p><i class="fas fa-calendar w-5 text-gray-400"></i> 지원일: ${escapeHtml(applicant.applied_at) || '-'}</p>
+                                    <p><i class="fas fa-link w-5 text-gray-400"></i> 유입경로: ${escapeHtml(applicant.source) || '-'}</p>
                                 </div>
                             </div>
                         </div>
@@ -1498,9 +1517,9 @@ const App = {
                         <div class="mt-6">
                             <h4 class="font-semibold text-gray-700 mb-3">경력 사항</h4>
                             <div class="bg-gray-50 p-4 rounded-lg space-y-2 text-sm">
-                                <p><strong>학력:</strong> ${applicant.education || '-'}</p>
-                                <p><strong>경력:</strong> ${applicant.experience || '-'}</p>
-                                <p><strong>희망연봉:</strong> ${applicant.desired_salary || '-'}</p>
+                                <p><strong>학력:</strong> ${escapeHtml(applicant.education) || '-'}</p>
+                                <p><strong>경력:</strong> ${escapeHtml(applicant.experience) || '-'}</p>
+                                <p><strong>희망연봉:</strong> ${escapeHtml(applicant.desired_salary) || '-'}</p>
                             </div>
                         </div>
 
@@ -1523,14 +1542,14 @@ const App = {
                                     <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
                                         <div class="flex items-center gap-2 flex-1">
                                             <i class="fas ${Storage.getFileIcon(att.file_type)}"></i>
-                                            <span class="text-sm">${att.file_name}</span>
-                                            <span class="text-xs text-gray-400">(${att.file_size})</span>
+                                            <span class="text-sm">${escapeHtml(att.file_name)}</span>
+                                            <span class="text-xs text-gray-400">(${escapeHtml(att.file_size)})</span>
                                         </div>
                                         <div class="flex items-center gap-2">
-                                            <button class="attachment-download-btn text-blue-500 hover:text-blue-700 p-1" data-path="${att.storage_path}" data-name="${att.file_name}" title="다운로드">
+                                            <button class="attachment-download-btn text-blue-500 hover:text-blue-700 p-1" data-path="${escapeHtml(att.storage_path)}" data-name="${escapeHtml(att.file_name)}" title="다운로드">
                                                 <i class="fas fa-download text-sm"></i>
                                             </button>
-                                            <button class="delete-attachment-btn text-red-500 hover:text-red-700 p-1" data-id="${att.id}" data-path="${att.storage_path}" title="삭제">
+                                            <button class="delete-attachment-btn text-red-500 hover:text-red-700 p-1" data-id="${att.id}" data-path="${escapeHtml(att.storage_path)}" title="삭제">
                                                 <i class="fas fa-trash text-sm"></i>
                                             </button>
                                         </div>
@@ -1543,7 +1562,7 @@ const App = {
                             <div class="mt-6">
                                 <h4 class="font-semibold text-gray-700 mb-3">메모</h4>
                                 <div class="bg-yellow-50 p-4 rounded-lg text-sm">
-                                    ${applicant.notes}
+                                    ${escapeHtml(applicant.notes)}
                                 </div>
                             </div>
                         ` : ''}
@@ -1683,7 +1702,7 @@ const App = {
                         <option value="">지원자 선택</option>
                         ${applicants.map(a => {
                             const posting = this.state.postings.find(p => p.id === a.posting_id);
-                            return `<option value="${a.id}" ${interview?.applicant_id === a.id ? 'selected' : ''}>${a.name} - ${posting?.title || ''}</option>`;
+                            return `<option value="${a.id}" ${interview?.applicant_id === a.id ? 'selected' : ''}>${escapeHtml(a.name)} - ${escapeHtml(posting?.title) || ''}</option>`;
                         }).join('')}
                     </select>
                 </div>
@@ -1717,11 +1736,11 @@ const App = {
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">장소</label>
-                    <input type="text" name="location" class="w-full px-4 py-2 border rounded-lg" value="${interview?.location || ''}" placeholder="예: 본사 3층 회의실">
+                    <input type="text" name="location" class="w-full px-4 py-2 border rounded-lg" value="${escapeHtml(interview?.location) || ''}" placeholder="예: 본사 3층 회의실">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">면접관</label>
-                    <input type="text" name="interviewers" class="w-full px-4 py-2 border rounded-lg" value="${interview?.interviewers || ''}" placeholder="예: 김팀장, 이과장">
+                    <input type="text" name="interviewers" class="w-full px-4 py-2 border rounded-lg" value="${escapeHtml(interview?.interviewers) || ''}" placeholder="예: 김팀장, 이과장">
                 </div>
             </form>
         `;
@@ -1784,15 +1803,15 @@ const App = {
             <form id="userForm" class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">이름</label>
-                    <input type="text" name="name" class="w-full px-4 py-2 border rounded-lg" value="${user.name}" required>
+                    <input type="text" name="name" class="w-full px-4 py-2 border rounded-lg" value="${escapeHtml(user.name)}" required>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">이메일</label>
-                    <input type="email" class="w-full px-4 py-2 border rounded-lg bg-gray-100" value="${user.email}" disabled>
+                    <input type="email" class="w-full px-4 py-2 border rounded-lg bg-gray-100" value="${escapeHtml(user.email)}" disabled>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">부서</label>
-                    <input type="text" name="department" class="w-full px-4 py-2 border rounded-lg" value="${user.department || ''}">
+                    <input type="text" name="department" class="w-full px-4 py-2 border rounded-lg" value="${escapeHtml(user.department) || ''}">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">역할</label>
