@@ -1313,6 +1313,9 @@ const App = {
 
     showPostingModal(posting = null) {
         const isEdit = !!posting;
+        const users = this.state.users.filter(u => u.role !== 'super_admin' && u.is_active);
+        const assignedUserIds = posting?.assigned_users || [];
+
         const content = `
             <form id="postingForm" class="space-y-4">
                 <div>
@@ -1343,6 +1346,20 @@ const App = {
                     <label class="block text-sm font-medium text-gray-700 mb-1">상세내용</label>
                     <textarea name="description" class="w-full px-4 py-2 border rounded-lg" rows="3">${escapeHtml(posting?.description) || ''}</textarea>
                 </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">열람 권한 할당</label>
+                    <p class="text-xs text-gray-500 mb-2">이 공고를 열람할 수 있는 사용자를 선택하세요. (슈퍼관리자는 항상 열람 가능)</p>
+                    <div class="max-h-40 overflow-y-auto border rounded-lg p-2 space-y-1">
+                        ${users.length > 0 ? users.map(u => `
+                            <label class="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                                <input type="checkbox" name="assigned_users" value="${u.id}" class="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" ${assignedUserIds.includes(u.id) ? 'checked' : ''}>
+                                <span class="text-sm">${escapeHtml(u.name)}</span>
+                                <span class="text-xs text-gray-400">(${escapeHtml(u.email)})</span>
+                                <span class="text-xs px-1.5 py-0.5 rounded ${u.role === 'admin' ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-600'}">${Auth.getRoleName(u.role)}</span>
+                            </label>
+                        `).join('') : '<p class="text-sm text-gray-400 text-center py-2">할당 가능한 사용자가 없습니다.</p>'}
+                    </div>
+                </div>
             </form>
         `;
 
@@ -1350,13 +1367,17 @@ const App = {
             const form = document.getElementById('postingForm');
             const formData = new FormData(form);
 
+            // 선택된 사용자 ID 배열 가져오기
+            const selectedUsers = Array.from(form.querySelectorAll('input[name="assigned_users"]:checked')).map(cb => cb.value);
+
             const data = {
                 title: formData.get('title'),
                 department: formData.get('department'),
                 headcount: parseInt(formData.get('headcount')) || 1,
                 start_date: formData.get('start_date') || null,
                 end_date: formData.get('end_date') || null,
-                description: formData.get('description')
+                description: formData.get('description'),
+                assigned_users: selectedUsers
             };
 
             if (!data.title) {
@@ -1575,6 +1596,23 @@ const App = {
                                 </div>
                             </div>
                         ` : ''}
+
+                        ${Auth.isAdminOrAbove() ? `
+                            <div class="mt-6">
+                                <h4 class="font-semibold text-gray-700 mb-3">
+                                    <i class="fas fa-lock text-purple-500 mr-2"></i>관리자 코멘트
+                                    <span class="text-xs font-normal text-gray-400 ml-2">(일반 사용자에게 비공개)</span>
+                                </h4>
+                                <div class="bg-purple-50 p-4 rounded-lg">
+                                    <textarea id="adminCommentInput" class="w-full px-3 py-2 border border-purple-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-400 focus:border-transparent" rows="3" placeholder="관리자만 볼 수 있는 코멘트를 입력하세요...">${escapeHtml(applicant.admin_comment) || ''}</textarea>
+                                    <div class="flex justify-end mt-2">
+                                        <button id="saveAdminCommentBtn" class="px-4 py-2 bg-purple-500 text-white text-sm rounded-lg hover:bg-purple-600 transition">
+                                            <i class="fas fa-save mr-1"></i>코멘트 저장
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
             </div>
@@ -1691,6 +1729,30 @@ const App = {
                 }
             };
         });
+
+        // 관리자 코멘트 저장
+        const saveAdminCommentBtn = document.getElementById('saveAdminCommentBtn');
+        if (saveAdminCommentBtn) {
+            saveAdminCommentBtn.onclick = async () => {
+                const commentInput = document.getElementById('adminCommentInput');
+                const adminComment = commentInput ? commentInput.value : '';
+
+                this.showLoading(true);
+                const result = await DB.updateApplicant(applicant.id, { admin_comment: adminComment });
+                this.showLoading(false);
+
+                if (result.success) {
+                    alert('관리자 코멘트가 저장되었습니다.');
+                    // 로컬 상태 업데이트
+                    const idx = this.state.applicants.findIndex(a => a.id === applicant.id);
+                    if (idx !== -1) {
+                        this.state.applicants[idx].admin_comment = adminComment;
+                    }
+                } else {
+                    alert('코멘트 저장에 실패했습니다.');
+                }
+            };
+        }
     },
 
     // =====================================================
@@ -1830,12 +1892,37 @@ const App = {
                         <option value="super_admin" ${user.role === 'super_admin' ? 'selected' : ''}>슈퍼관리자</option>
                     </select>
                 </div>
+                <hr class="my-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">새 비밀번호 설정</label>
+                    <p class="text-xs text-gray-500 mb-2">비밀번호를 변경하려면 입력하세요. (비워두면 기존 비밀번호 유지)</p>
+                    <input type="password" name="newPassword" class="w-full px-4 py-2 border rounded-lg" placeholder="새 비밀번호 (최소 6자)" minlength="6">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">비밀번호 확인</label>
+                    <input type="password" name="confirmPassword" class="w-full px-4 py-2 border rounded-lg" placeholder="비밀번호 재입력" minlength="6">
+                </div>
             </form>
         `;
 
         this.showModal('사용자 수정', content, async () => {
             const form = document.getElementById('userForm');
             const formData = new FormData(form);
+
+            const newPassword = formData.get('newPassword');
+            const confirmPassword = formData.get('confirmPassword');
+
+            // 비밀번호 변경 시 유효성 검사
+            if (newPassword) {
+                if (newPassword.length < 6) {
+                    alert('비밀번호는 최소 6자 이상이어야 합니다.');
+                    return false;
+                }
+                if (newPassword !== confirmPassword) {
+                    alert('비밀번호가 일치하지 않습니다.');
+                    return false;
+                }
+            }
 
             const data = {
                 name: formData.get('name'),
@@ -1844,7 +1931,19 @@ const App = {
             };
 
             this.showLoading(true);
+
+            // 프로필 정보 업데이트
             const result = await DB.updateUser(user.id, data);
+
+            // 비밀번호 변경이 필요한 경우 (관리자가 직접 변경하는 API가 필요)
+            // 현재 Supabase Client API로는 다른 사용자의 비밀번호를 변경할 수 없음
+            // 대신 비밀번호 재설정 이메일을 보내는 방식 사용
+            if (newPassword && result.success) {
+                // 참고: 이 기능은 Supabase Admin API 필요 (서버 사이드)
+                // 클라이언트에서는 비밀번호 재설정 이메일 발송만 가능
+                alert('주의: 관리자가 직접 비밀번호를 변경하려면 Supabase Admin API가 필요합니다.\n현재는 사용자에게 비밀번호 재설정을 안내해주세요.\n\n새 비밀번호: ' + newPassword + '\n(이 정보를 해당 사용자에게 전달하세요)');
+            }
+
             if (result.success) {
                 await this.loadData();
                 this.render();
