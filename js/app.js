@@ -772,6 +772,9 @@ const App = {
         return `
             <div class="flex items-center justify-between mb-4">
                 <h2 class="text-lg font-semibold">사용자 목록</h2>
+                <button id="addUserBtn" class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 text-sm">
+                    <i class="fas fa-plus mr-2"></i>사용자 추가
+                </button>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full">
@@ -1220,6 +1223,12 @@ const App = {
     },
 
     bindUserEvents() {
+        // 사용자 추가
+        const addUserBtn = document.getElementById('addUserBtn');
+        if (addUserBtn) {
+            addUserBtn.onclick = () => this.showAddUserModal();
+        }
+
         // 사용자 수정
         document.querySelectorAll('.edit-user-btn').forEach(el => {
             el.onclick = () => {
@@ -1844,6 +1853,91 @@ const App = {
             }
             this.showLoading(false);
             return result.success;
+        });
+    },
+
+    // 새 사용자 추가 모달
+    showAddUserModal() {
+        const content = `
+            <form id="addUserForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">이메일 *</label>
+                    <input type="email" name="email" class="w-full px-4 py-2 border rounded-lg" placeholder="example@company.com" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">비밀번호 *</label>
+                    <input type="password" name="password" class="w-full px-4 py-2 border rounded-lg" placeholder="최소 6자 이상" minlength="6" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">비밀번호 확인 *</label>
+                    <input type="password" name="passwordConfirm" class="w-full px-4 py-2 border rounded-lg" placeholder="비밀번호 재입력" minlength="6" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">이름 *</label>
+                    <input type="text" name="name" class="w-full px-4 py-2 border rounded-lg" placeholder="홍길동" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">부서</label>
+                    <input type="text" name="department" class="w-full px-4 py-2 border rounded-lg" placeholder="인사팀">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">역할 *</label>
+                    <select name="role" class="w-full px-4 py-2 border rounded-lg" required>
+                        <option value="user">일반 사용자 (열람자)</option>
+                        <option value="admin">관리자</option>
+                        <option value="super_admin">슈퍼관리자</option>
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">
+                        • 일반 사용자: 할당된 공고 열람만 가능<br>
+                        • 관리자: 공고 및 지원자 관리 가능<br>
+                        • 슈퍼관리자: 모든 권한 (사용자 관리 포함)
+                    </p>
+                </div>
+            </form>
+        `;
+
+        this.showModal('새 사용자 추가', content, async () => {
+            const form = document.getElementById('addUserForm');
+            const formData = new FormData(form);
+
+            const email = formData.get('email');
+            const password = formData.get('password');
+            const passwordConfirm = formData.get('passwordConfirm');
+            const name = formData.get('name');
+            const department = formData.get('department');
+            const role = formData.get('role');
+
+            // 유효성 검사
+            if (!email || !password || !name || !role) {
+                alert('필수 항목을 모두 입력해주세요.');
+                return false;
+            }
+
+            if (password !== passwordConfirm) {
+                alert('비밀번호가 일치하지 않습니다.');
+                return false;
+            }
+
+            if (password.length < 6) {
+                alert('비밀번호는 최소 6자 이상이어야 합니다.');
+                return false;
+            }
+
+            this.showLoading(true);
+            const result = await Auth.createNewUser(email, password, name, role, department);
+            this.showLoading(false);
+
+            if (result.success) {
+                alert(result.message);
+                // 세션이 변경되었으므로 로그인 페이지로 이동
+                Auth.clearSession();
+                this.state.currentUser = null;
+                this.render();
+                return true;
+            } else {
+                alert('사용자 생성 실패: ' + result.error);
+                return false;
+            }
         });
     },
 

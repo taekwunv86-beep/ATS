@@ -144,6 +144,69 @@ const Auth = {
         }
     },
 
+    // 새 사용자 생성 (슈퍼관리자 전용)
+    async createNewUser(email, password, name, role, department) {
+        try {
+            // 현재 관리자 세션 저장
+            const currentAdminEmail = this.currentProfile?.email;
+
+            // 새 사용자 생성 (Supabase Auth에 등록)
+            const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({
+                email: email,
+                password: password,
+                options: {
+                    data: {
+                        name: name,
+                        role: role,
+                        department: department
+                    }
+                }
+            });
+
+            if (signUpError) {
+                throw signUpError;
+            }
+
+            if (!signUpData.user) {
+                throw new Error('사용자 생성에 실패했습니다.');
+            }
+
+            const newUserId = signUpData.user.id;
+
+            // 프로필 테이블에 사용자 정보 추가/업데이트
+            const { error: profileError } = await supabaseClient
+                .from('profiles')
+                .upsert({
+                    id: newUserId,
+                    email: email,
+                    name: name,
+                    role: role,
+                    department: department || null,
+                    is_active: true
+                });
+
+            if (profileError) {
+                console.error('프로필 생성 실패:', profileError);
+                // 프로필 생성 실패해도 계속 진행 (트리거로 생성될 수 있음)
+            }
+
+            // 관리자 세션으로 복귀하기 위해 로그아웃
+            // (signUp이 새 사용자로 자동 로그인하므로)
+            await supabaseClient.auth.signOut();
+
+            return {
+                success: true,
+                userId: newUserId,
+                message: '사용자가 생성되었습니다. 다시 로그인해 주세요.',
+                needRelogin: true,
+                adminEmail: currentAdminEmail
+            };
+        } catch (err) {
+            console.error('사용자 생성 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
     // 권한 확인
     canAccess(requiredRoles) {
         if (!this.currentProfile) return false;
