@@ -772,9 +772,18 @@ const App = {
         return `
             <div class="flex items-center justify-between mb-4">
                 <h2 class="text-lg font-semibold">사용자 목록</h2>
-                <button id="addUserBtn" class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 text-sm">
-                    <i class="fas fa-plus mr-2"></i>사용자 추가
-                </button>
+                <div class="flex gap-2">
+                    <button id="downloadUserTemplateBtn" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm">
+                        <i class="fas fa-download mr-2"></i>양식 다운로드
+                    </button>
+                    <button id="uploadUserExcelBtn" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm">
+                        <i class="fas fa-file-excel mr-2"></i>엑셀 업로드
+                    </button>
+                    <input type="file" id="userExcelFileInput" accept=".xlsx,.xls" class="hidden">
+                    <button id="addUserBtn" class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 text-sm">
+                        <i class="fas fa-plus mr-2"></i>사용자 추가
+                    </button>
+                </div>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full">
@@ -1227,6 +1236,25 @@ const App = {
         const addUserBtn = document.getElementById('addUserBtn');
         if (addUserBtn) {
             addUserBtn.onclick = () => this.showAddUserModal();
+        }
+
+        // 사용자 엑셀 양식 다운로드
+        const downloadUserTemplateBtn = document.getElementById('downloadUserTemplateBtn');
+        if (downloadUserTemplateBtn) {
+            downloadUserTemplateBtn.onclick = () => this.downloadUserTemplate();
+        }
+
+        // 사용자 엑셀 업로드
+        const uploadUserExcelBtn = document.getElementById('uploadUserExcelBtn');
+        const userExcelFileInput = document.getElementById('userExcelFileInput');
+        if (uploadUserExcelBtn && userExcelFileInput) {
+            uploadUserExcelBtn.onclick = () => userExcelFileInput.click();
+            userExcelFileInput.onchange = () => {
+                if (userExcelFileInput.files[0]) {
+                    this.handleUserExcelUpload(userExcelFileInput.files[0]);
+                    userExcelFileInput.value = ''; // 같은 파일 재선택 가능하도록
+                }
+            };
         }
 
         // 사용자 수정
@@ -2215,6 +2243,194 @@ const App = {
 
         const fileName = `${posting.title}_지원자목록_${new Date().toISOString().split('T')[0]}.xlsx`;
         XLSX.writeFile(wb, fileName);
+    },
+
+    // 사용자 일괄 등록 양식 다운로드
+    downloadUserTemplate() {
+        const templateData = [
+            {
+                '이름': '홍길동',
+                '이메일': 'hong@example.com',
+                '비밀번호': 'password123',
+                '부서': '개발팀',
+                '역할': 'user'
+            },
+            {
+                '이름': '김철수',
+                '이메일': 'kim@example.com',
+                '비밀번호': 'password456',
+                '부서': '인사팀',
+                '역할': 'admin'
+            }
+        ];
+
+        // 설명 시트 데이터
+        const instructions = [
+            { '항목': '이름', '설명': '사용자 이름 (필수)', '예시': '홍길동' },
+            { '항목': '이메일', '설명': '로그인에 사용할 이메일 주소 (필수)', '예시': 'hong@example.com' },
+            { '항목': '비밀번호', '설명': '초기 비밀번호, 최소 6자 이상 (필수)', '예시': 'password123' },
+            { '항목': '부서', '설명': '소속 부서 (선택)', '예시': '개발팀' },
+            { '항목': '역할', '설명': 'user(일반사용자), admin(관리자) 중 선택 (선택, 기본값: user)', '예시': 'user' }
+        ];
+
+        const wb = XLSX.utils.book_new();
+
+        // 사용자 목록 시트
+        const wsUsers = XLSX.utils.json_to_sheet(templateData);
+        wsUsers['!cols'] = [{ wch: 15 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 10 }];
+        XLSX.utils.book_append_sheet(wb, wsUsers, '사용자목록');
+
+        // 설명 시트
+        const wsInstructions = XLSX.utils.json_to_sheet(instructions);
+        wsInstructions['!cols'] = [{ wch: 12 }, { wch: 50 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, wsInstructions, '작성요령');
+
+        XLSX.writeFile(wb, '사용자_일괄등록_양식.xlsx');
+    },
+
+    // 사용자 엑셀 일괄 등록
+    async handleUserExcelUpload(file) {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                if (jsonData.length === 0) {
+                    alert('엑셀 파일에 데이터가 없습니다.');
+                    return;
+                }
+
+                // 필수 컬럼 확인
+                const requiredCols = ['이름', '이메일', '비밀번호'];
+                const columns = Object.keys(jsonData[0]);
+                const missingCols = requiredCols.filter(col => !columns.some(c => c.includes(col)));
+
+                if (missingCols.length > 0) {
+                    alert(`필수 컬럼이 없습니다: ${missingCols.join(', ')}\n\n양식 다운로드 버튼을 클릭하여 올바른 양식을 사용하세요.`);
+                    return;
+                }
+
+                // 컬럼명 매핑
+                const findColumn = (keywords) => {
+                    return columns.find(c => keywords.some(kw => c.includes(kw)));
+                };
+
+                const colMap = {
+                    name: findColumn(['이름', '성명', 'name']),
+                    email: findColumn(['이메일', 'email', 'Email']),
+                    password: findColumn(['비밀번호', 'password', 'Password']),
+                    department: findColumn(['부서', 'department', 'Department']),
+                    role: findColumn(['역할', 'role', 'Role'])
+                };
+
+                // 데이터 유효성 검사
+                const users = [];
+                const errors = [];
+
+                for (let i = 0; i < jsonData.length; i++) {
+                    const row = jsonData[i];
+                    const rowNum = i + 2; // 엑셀 행 번호 (헤더 + 1-based)
+
+                    const name = row[colMap.name]?.toString().trim();
+                    const email = row[colMap.email]?.toString().trim();
+                    const password = row[colMap.password]?.toString().trim();
+                    const department = colMap.department ? row[colMap.department]?.toString().trim() : '';
+                    let role = colMap.role ? row[colMap.role]?.toString().trim().toLowerCase() : 'user';
+
+                    // 필수값 검사
+                    if (!name) {
+                        errors.push(`${rowNum}행: 이름이 없습니다.`);
+                        continue;
+                    }
+                    if (!email) {
+                        errors.push(`${rowNum}행: 이메일이 없습니다.`);
+                        continue;
+                    }
+                    if (!password || password.length < 6) {
+                        errors.push(`${rowNum}행: 비밀번호는 최소 6자 이상이어야 합니다.`);
+                        continue;
+                    }
+
+                    // 이메일 형식 검사
+                    if (!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+                        errors.push(`${rowNum}행: 이메일 형식이 올바르지 않습니다.`);
+                        continue;
+                    }
+
+                    // 역할 검사 (super_admin은 엑셀로 생성 불가)
+                    if (!['user', 'admin'].includes(role)) {
+                        role = 'user';
+                    }
+
+                    users.push({ name, email, password, department, role });
+                }
+
+                if (errors.length > 0 && users.length === 0) {
+                    alert('유효한 데이터가 없습니다.\n\n' + errors.join('\n'));
+                    return;
+                }
+
+                // 등록 확인
+                let confirmMsg = `${users.length}명의 사용자를 등록하시겠습니까?`;
+                if (errors.length > 0) {
+                    confirmMsg += `\n\n⚠️ ${errors.length}건의 오류가 있어 제외됩니다:\n${errors.slice(0, 5).join('\n')}`;
+                    if (errors.length > 5) {
+                        confirmMsg += `\n... 외 ${errors.length - 5}건`;
+                    }
+                }
+
+                if (!confirm(confirmMsg)) {
+                    return;
+                }
+
+                // 사용자 일괄 등록
+                this.showLoading(true);
+                const results = { success: 0, failed: 0, failedUsers: [] };
+
+                for (const user of users) {
+                    const result = await Auth.createNewUser(
+                        user.email,
+                        user.password,
+                        user.name,
+                        user.role,
+                        user.department
+                    );
+
+                    if (result.success) {
+                        results.success++;
+                    } else {
+                        results.failed++;
+                        results.failedUsers.push(`${user.name} (${user.email}): ${result.error}`);
+                    }
+                }
+
+                this.showLoading(false);
+
+                // 결과 표시
+                let resultMsg = `등록 완료: ${results.success}명 성공`;
+                if (results.failed > 0) {
+                    resultMsg += `, ${results.failed}명 실패\n\n실패 목록:\n${results.failedUsers.join('\n')}`;
+                }
+
+                alert(resultMsg);
+
+                // 사용자 생성 시 세션이 바뀌므로 다시 로그인 필요
+                if (results.success > 0) {
+                    alert('사용자 등록이 완료되었습니다.\n보안을 위해 다시 로그인해 주세요.');
+                    await Auth.logout();
+                    this.render();
+                }
+
+            } catch (err) {
+                console.error('사용자 엑셀 업로드 오류:', err);
+                alert('엑셀 파일 처리 중 오류가 발생했습니다: ' + err.message);
+            }
+        };
+        reader.readAsArrayBuffer(file);
     },
 
     // 첨부파일 다운로드 버튼 업데이트
