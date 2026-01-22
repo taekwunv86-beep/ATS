@@ -22,3 +22,4 @@ function checkSupabaseConfig() {
 // Export for use in other modules
 window.supabaseClient = supabaseClient;
 window.checkSupabaseConfig = checkSupabaseConfig;
+window.SUPABASE_URL = SUPABASE_URL;

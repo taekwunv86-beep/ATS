@@ -128,7 +128,7 @@ const Auth = {
         }
     },
 
-    // 비밀번호 변경
+    // 비밀번호 변경 (본인)
     async changePassword(newPassword) {
         try {
             const { error } = await supabaseClient.auth.updateUser({
@@ -140,6 +140,41 @@ const Auth = {
             return { success: true };
         } catch (err) {
             console.error('비밀번호 변경 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 다른 사용자 비밀번호 변경 (슈퍼관리자 전용 - Edge Function 사용)
+    async changeUserPassword(userId, newPassword) {
+        try {
+            // 현재 세션 토큰 가져오기
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) {
+                return { success: false, error: '로그인이 필요합니다.' };
+            }
+
+            // Edge Function 호출
+            const response = await fetch(`${SUPABASE_URL}/functions/v1/change-password`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    userId: userId,
+                    newPassword: newPassword
+                })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || '비밀번호 변경에 실패했습니다.');
+            }
+
+            return { success: true, message: result.message };
+        } catch (err) {
+            console.error('사용자 비밀번호 변경 실패:', err);
             return { success: false, error: err.message };
         }
     },

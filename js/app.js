@@ -1935,13 +1935,14 @@ const App = {
             // 프로필 정보 업데이트
             const result = await DB.updateUser(user.id, data);
 
-            // 비밀번호 변경이 필요한 경우 (관리자가 직접 변경하는 API가 필요)
-            // 현재 Supabase Client API로는 다른 사용자의 비밀번호를 변경할 수 없음
-            // 대신 비밀번호 재설정 이메일을 보내는 방식 사용
+            // 비밀번호 변경이 필요한 경우 Edge Function 호출
             if (newPassword && result.success) {
-                // 참고: 이 기능은 Supabase Admin API 필요 (서버 사이드)
-                // 클라이언트에서는 비밀번호 재설정 이메일 발송만 가능
-                alert('주의: 관리자가 직접 비밀번호를 변경하려면 Supabase Admin API가 필요합니다.\n현재는 사용자에게 비밀번호 재설정을 안내해주세요.\n\n새 비밀번호: ' + newPassword + '\n(이 정보를 해당 사용자에게 전달하세요)');
+                const pwResult = await Auth.changeUserPassword(user.id, newPassword);
+                if (pwResult.success) {
+                    alert('비밀번호가 성공적으로 변경되었습니다.');
+                } else {
+                    alert('비밀번호 변경 실패: ' + pwResult.error);
+                }
             }
 
             if (result.success) {
