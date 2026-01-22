@@ -190,66 +190,57 @@ const Auth = {
         }
     },
 
-    // 새 사용자 생성 (슈퍼관리자 전용)
+    // 새 사용자 생성 (슈퍼관리자 전용 - Edge Function 사용)
     async createNewUser(email, password, name, role, department) {
         try {
-            // 현재 관리자 세션 저장
-            const currentAdminEmail = this.currentProfile?.email;
-
-            // 새 사용자 생성 (Supabase Auth에 등록)
-            const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({
-                email: email,
-                password: password,
-                options: {
-                    data: {
-                        name: name,
-                        role: role,
-                        department: department
-                    }
-                }
-            });
-
-            if (signUpError) {
-                throw signUpError;
+            // 현재 세션 토큰 가져오기
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) {
+                return { success: false, error: '로그인이 필요합니다.' };
             }
 
-            if (!signUpData.user) {
-                throw new Error('사용자 생성에 실패했습니다.');
-            }
+            console.log('Edge Function 호출: create-user');
 
-            const newUserId = signUpData.user.id;
-
-            // 프로필 테이블에 사용자 정보 추가/업데이트
-            const { error: profileError } = await supabaseClient
-                .from('profiles')
-                .upsert({
-                    id: newUserId,
+            // Edge Function 호출
+            const response = await fetch(`${SUPABASE_URL}/functions/v1/create-user`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
                     email: email,
+                    password: password,
                     name: name,
                     role: role,
-                    department: department || null,
-                    is_active: true
-                });
+                    department: department
+                })
+            });
 
-            if (profileError) {
-                console.error('프로필 생성 실패:', profileError);
-                // 프로필 생성 실패해도 계속 진행 (트리거로 생성될 수 있음)
+            console.log('Edge Function 응답 상태:', response.status);
+
+            let result;
+            try {
+                result = await response.json();
+                console.log('Edge Function 응답:', result);
+            } catch (parseError) {
+                console.error('JSON 파싱 실패:', parseError);
+                return { success: false, error: 'Edge Function 응답 파싱 실패' };
             }
 
-            // 관리자 세션으로 복귀하기 위해 로그아웃
-            // (signUp이 새 사용자로 자동 로그인하므로)
-            await supabaseClient.auth.signOut();
+            if (!response.ok) {
+                return { success: false, error: result.error || `HTTP ${response.status} 에러` };
+            }
 
             return {
                 success: true,
-                userId: newUserId,
-                message: '사용자가 생성되었습니다. 다시 로그인해 주세요.',
-                needRelogin: true,
-                adminEmail: currentAdminEmail
+                userId: result.userId,
+                message: result.message || '사용자가 생성되었습니다.',
+                needRelogin: false // Edge Function 사용 시 세션 유지됨
             };
         } catch (err) {
             console.error('사용자 생성 실패:', err);
-            return { success: false, error: err.message };
+            return { success: false, error: `네트워크 오류: ${err.message}` };
         }
     },
 

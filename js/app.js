@@ -2141,9 +2141,8 @@ const App = {
 
             if (result.success) {
                 alert(result.message);
-                // 세션이 변경되었으므로 로그인 페이지로 이동
-                Auth.clearSession();
-                this.state.currentUser = null;
+                // 사용자 목록 새로고침
+                await this.loadData();
                 this.render();
                 return true;
             } else {
@@ -2502,10 +2501,9 @@ const App = {
 
                 alert(resultMsg);
 
-                // 사용자 생성 시 세션이 바뀌므로 다시 로그인 필요
+                // 사용자 목록 새로고침
                 if (results.success > 0) {
-                    alert('사용자 등록이 완료되었습니다.\n보안을 위해 다시 로그인해 주세요.');
-                    await Auth.logout();
+                    await this.loadData();
                     this.render();
                 }
 
