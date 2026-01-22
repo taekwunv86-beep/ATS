@@ -481,6 +481,70 @@ const DB = {
     },
 
     // =====================================================
+    // 관리자 코멘트 관리
+    // =====================================================
+
+    // 지원자의 코멘트 목록 조회
+    async getApplicantComments(applicantId) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('applicant_comments')
+                .select(`
+                    *,
+                    profiles:user_id (name, email)
+                `)
+                .eq('applicant_id', applicantId)
+                .order('created_at', { ascending: true });
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('코멘트 목록 조회 실패:', err);
+            return { success: false, error: err.message, data: [] };
+        }
+    },
+
+    // 코멘트 추가
+    async addApplicantComment(applicantId, content) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('applicant_comments')
+                .insert({
+                    applicant_id: applicantId,
+                    user_id: Auth.currentUser?.id,
+                    content: content
+                })
+                .select(`
+                    *,
+                    profiles:user_id (name, email)
+                `)
+                .single();
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('코멘트 추가 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 코멘트 삭제
+    async deleteApplicantComment(commentId) {
+        try {
+            const { error } = await supabaseClient
+                .from('applicant_comments')
+                .delete()
+                .eq('id', commentId);
+
+            if (error) throw error;
+            return { success: true };
+        } catch (err) {
+            console.error('코멘트 삭제 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // =====================================================
     // 유틸리티 함수
     // =====================================================
 

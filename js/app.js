@@ -1628,14 +1628,19 @@ const App = {
                         ${Auth.isAdminOrAbove() ? `
                             <div class="mt-6">
                                 <h4 class="font-semibold text-gray-700 mb-3">
-                                    <i class="fas fa-lock text-purple-500 mr-2"></i>관리자 코멘트
+                                    <i class="fas fa-comments text-purple-500 mr-2"></i>관리자 코멘트
                                     <span class="text-xs font-normal text-gray-400 ml-2">(일반 사용자에게 비공개)</span>
                                 </h4>
                                 <div class="bg-purple-50 p-4 rounded-lg">
-                                    <textarea id="adminCommentInput" class="w-full px-3 py-2 border border-purple-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-400 focus:border-transparent" rows="3" placeholder="관리자만 볼 수 있는 코멘트를 입력하세요...">${escapeHtml(applicant.admin_comment) || ''}</textarea>
-                                    <div class="flex justify-end mt-2">
-                                        <button id="saveAdminCommentBtn" class="px-4 py-2 bg-purple-500 text-white text-sm rounded-lg hover:bg-purple-600 transition">
-                                            <i class="fas fa-save mr-1"></i>코멘트 저장
+                                    <!-- 코멘트 히스토리 -->
+                                    <div id="commentHistory" class="space-y-3 mb-4 max-h-60 overflow-y-auto">
+                                        <p class="text-sm text-gray-400 text-center py-2">코멘트를 불러오는 중...</p>
+                                    </div>
+                                    <!-- 새 코멘트 입력 -->
+                                    <div class="flex gap-2">
+                                        <input type="text" id="newCommentInput" class="flex-1 px-3 py-2 border border-purple-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-400 focus:border-transparent" placeholder="코멘트를 입력하세요...">
+                                        <button id="addCommentBtn" class="px-4 py-2 bg-purple-500 text-white text-sm rounded-lg hover:bg-purple-600 transition whitespace-nowrap">
+                                            <i class="fas fa-plus mr-1"></i>추가
                                         </button>
                                     </div>
                                 </div>
@@ -1758,28 +1763,107 @@ const App = {
             };
         });
 
-        // 관리자 코멘트 저장
-        const saveAdminCommentBtn = document.getElementById('saveAdminCommentBtn');
-        if (saveAdminCommentBtn) {
-            saveAdminCommentBtn.onclick = async () => {
-                const commentInput = document.getElementById('adminCommentInput');
-                const adminComment = commentInput ? commentInput.value : '';
+        // 관리자 코멘트 히스토리
+        const commentHistory = document.getElementById('commentHistory');
+        const newCommentInput = document.getElementById('newCommentInput');
+        const addCommentBtn = document.getElementById('addCommentBtn');
 
-                this.showLoading(true);
-                const result = await DB.updateApplicant(applicant.id, { admin_comment: adminComment });
-                this.showLoading(false);
+        if (commentHistory && Auth.isAdminOrAbove()) {
+            // 코멘트 렌더링 함수
+            const renderComments = (comments) => {
+                if (!comments || comments.length === 0) {
+                    commentHistory.innerHTML = '<p class="text-sm text-gray-400 text-center py-2">아직 코멘트가 없습니다.</p>';
+                    return;
+                }
 
+                commentHistory.innerHTML = comments.map(c => {
+                    const authorName = c.profiles?.name || '알 수 없음';
+                    const date = new Date(c.created_at);
+                    const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+                    const isOwn = c.user_id === Auth.currentUser?.id;
+                    const isSuperAdmin = Auth.isSuperAdmin();
+
+                    return `
+                        <div class="bg-white p-3 rounded-lg shadow-sm border border-purple-100">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="font-medium text-sm text-purple-700">${escapeHtml(authorName)}</span>
+                                        <span class="text-xs text-gray-400">${dateStr}</span>
+                                    </div>
+                                    <p class="text-sm text-gray-700">${escapeHtml(c.content)}</p>
+                                </div>
+                                ${isOwn || isSuperAdmin ? `
+                                    <button class="delete-comment-btn text-red-400 hover:text-red-600 p-1" data-comment-id="${c.id}" title="삭제">
+                                        <i class="fas fa-times text-xs"></i>
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                // 삭제 버튼 이벤트
+                commentHistory.querySelectorAll('.delete-comment-btn').forEach(btn => {
+                    btn.onclick = async () => {
+                        if (!confirm('이 코멘트를 삭제하시겠습니까?')) return;
+
+                        const commentId = parseInt(btn.dataset.commentId);
+                        const result = await DB.deleteApplicantComment(commentId);
+                        if (result.success) {
+                            loadComments();
+                        } else {
+                            alert('코멘트 삭제에 실패했습니다.');
+                        }
+                    };
+                });
+
+                // 스크롤을 맨 아래로
+                commentHistory.scrollTop = commentHistory.scrollHeight;
+            };
+
+            // 코멘트 로드 함수
+            const loadComments = async () => {
+                const result = await DB.getApplicantComments(applicant.id);
                 if (result.success) {
-                    alert('관리자 코멘트가 저장되었습니다.');
-                    // 로컬 상태 업데이트
-                    const idx = this.state.applicants.findIndex(a => a.id === applicant.id);
-                    if (idx !== -1) {
-                        this.state.applicants[idx].admin_comment = adminComment;
-                    }
+                    renderComments(result.data);
                 } else {
-                    alert('코멘트 저장에 실패했습니다.');
+                    commentHistory.innerHTML = '<p class="text-sm text-red-400 text-center py-2">코멘트를 불러오는데 실패했습니다.</p>';
                 }
             };
+
+            // 초기 로드
+            loadComments();
+
+            // 코멘트 추가
+            if (addCommentBtn && newCommentInput) {
+                const addComment = async () => {
+                    const content = newCommentInput.value.trim();
+                    if (!content) {
+                        alert('코멘트 내용을 입력하세요.');
+                        return;
+                    }
+
+                    addCommentBtn.disabled = true;
+                    const result = await DB.addApplicantComment(applicant.id, content);
+                    addCommentBtn.disabled = false;
+
+                    if (result.success) {
+                        newCommentInput.value = '';
+                        loadComments();
+                    } else {
+                        alert('코멘트 추가에 실패했습니다: ' + result.error);
+                    }
+                };
+
+                addCommentBtn.onclick = addComment;
+                newCommentInput.onkeypress = (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addComment();
+                    }
+                };
+            }
         }
     },
 
