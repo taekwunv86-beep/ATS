@@ -728,6 +728,12 @@ const App = {
                                         <a href="${googleCalUrl}" target="_blank" class="text-blue-500 hover:text-blue-700" title="Google 캘린더에 추가">
                                             <i class="fab fa-google text-sm"></i>
                                         </a>
+                                        <button class="edit-interview-btn text-gray-500 hover:text-gray-700" data-interview-id="${i.id}" title="수정">
+                                            <i class="fas fa-edit text-sm"></i>
+                                        </button>
+                                        <button class="delete-interview-btn text-red-400 hover:text-red-600" data-interview-id="${i.id}" title="삭제">
+                                            <i class="fas fa-trash text-sm"></i>
+                                        </button>
                                     </div>
                                 </div>
                                 <div class="flex items-center justify-between mt-1">
@@ -1377,6 +1383,35 @@ const App = {
                 this.render();
             };
         }
+
+        // 면접 수정
+        document.querySelectorAll('.edit-interview-btn').forEach(btn => {
+            btn.onclick = () => {
+                const interviewId = parseInt(btn.dataset.interviewId);
+                const interview = this.state.interviews.find(i => i.id === interviewId);
+                if (interview) {
+                    this.showInterviewModal(interview);
+                }
+            };
+        });
+
+        // 면접 삭제
+        document.querySelectorAll('.delete-interview-btn').forEach(btn => {
+            btn.onclick = async () => {
+                if (!confirm('이 면접 일정을 삭제하시겠습니까?')) return;
+
+                const interviewId = parseInt(btn.dataset.interviewId);
+                this.showLoading(true);
+                const result = await DB.deleteInterview(interviewId);
+                if (result.success) {
+                    await this.loadData();
+                    this.render();
+                } else {
+                    alert('면접 삭제에 실패했습니다.');
+                }
+                this.showLoading(false);
+            };
+        });
     },
 
     bindStatsEvents() {
