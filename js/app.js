@@ -1630,14 +1630,25 @@ const App = {
                                 <input type="file" id="dropZoneInput" class="hidden" accept=".pdf,.doc,.docx,.hwp,.jpg,.png" multiple>
                             </div>
                             <div class="mt-3 space-y-2" id="attachmentList">
-                                ${attachments.length ? attachments.map(att => `
+                                ${attachments.length ? attachments.map(att => {
+                                    const isPdf = Storage.isPdf(att.file_name);
+                                    return `
                                     <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
                                         <div class="flex items-center gap-2 flex-1">
                                             <i class="fas ${Storage.getFileIcon(att.file_type)}"></i>
-                                            <span class="text-sm">${escapeHtml(att.file_name)}</span>
+                                            ${isPdf ? `
+                                                <a href="#" class="pdf-view-link text-sm text-blue-600 hover:underline cursor-pointer" data-path="${escapeHtml(att.storage_path)}">${escapeHtml(att.file_name)}</a>
+                                            ` : `
+                                                <span class="text-sm">${escapeHtml(att.file_name)}</span>
+                                            `}
                                             <span class="text-xs text-gray-400">(${escapeHtml(att.file_size)})</span>
                                         </div>
                                         <div class="flex items-center gap-2">
+                                            ${isPdf ? `
+                                                <button class="pdf-view-btn text-green-500 hover:text-green-700 p-1" data-path="${escapeHtml(att.storage_path)}" title="브라우저에서 보기">
+                                                    <i class="fas fa-eye text-sm"></i>
+                                                </button>
+                                            ` : ''}
                                             <button class="attachment-download-btn text-blue-500 hover:text-blue-700 p-1" data-path="${escapeHtml(att.storage_path)}" data-name="${escapeHtml(att.file_name)}" title="다운로드">
                                                 <i class="fas fa-download text-sm"></i>
                                             </button>
@@ -1646,7 +1657,7 @@ const App = {
                                             </button>
                                         </div>
                                     </div>
-                                `).join('') : '<p class="text-sm text-gray-400 text-center py-2">첨부된 파일이 없습니다.</p>'}
+                                `}).join('') : '<p class="text-sm text-gray-400 text-center py-2">첨부된 파일이 없습니다.</p>'}
                             </div>
                         </div>
 
@@ -1771,6 +1782,21 @@ const App = {
                 }
             };
         }
+
+        // PDF 브라우저에서 보기 (버튼)
+        document.querySelectorAll('.pdf-view-btn').forEach(btn => {
+            btn.onclick = async () => {
+                await Storage.viewPdfInBrowser(btn.dataset.path);
+            };
+        });
+
+        // PDF 브라우저에서 보기 (파일명 클릭)
+        document.querySelectorAll('.pdf-view-link').forEach(link => {
+            link.onclick = async (e) => {
+                e.preventDefault();
+                await Storage.viewPdfInBrowser(link.dataset.path);
+            };
+        });
 
         // 첨부파일 다운로드 버튼
         document.querySelectorAll('.attachment-download-btn').forEach(btn => {

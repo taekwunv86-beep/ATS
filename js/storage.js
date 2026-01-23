@@ -134,6 +134,31 @@ const Storage = {
         }
     },
 
+    // PDF 파일 브라우저에서 보기 (새 탭)
+    async viewPdfInBrowser(storagePath) {
+        try {
+            // 1시간 유효한 서명된 URL 생성
+            const { data, error } = await supabaseClient.storage
+                .from(this.BUCKET_NAME)
+                .createSignedUrl(storagePath, 3600);
+
+            if (error) throw error;
+
+            // 새 탭에서 PDF 열기
+            window.open(data.signedUrl, '_blank');
+
+            return { success: true };
+        } catch (err) {
+            console.error('PDF 보기 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 파일이 PDF인지 확인
+    isPdf(fileName) {
+        return fileName?.toLowerCase().endsWith('.pdf');
+    },
+
     // 여러 파일 ZIP으로 다운로드
     async downloadFilesAsZip(attachments, zipFileName = 'attachments.zip') {
         try {
