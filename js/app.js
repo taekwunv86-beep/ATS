@@ -17,6 +17,54 @@ function escapeHtml(str) {
 // 전역으로 사용 가능하도록 export
 window.escapeHtml = escapeHtml;
 
+// Google Calendar URL 생성 함수
+function generateGoogleCalendarUrl(interview, applicantName, postingTitle) {
+    const baseUrl = 'https://calendar.google.com/calendar/render';
+
+    // 날짜/시간 파싱
+    const date = interview.date; // YYYY-MM-DD
+    const time = interview.time || '09:00'; // HH:mm
+    const duration = interview.duration || 60; // minutes
+
+    // 시작/종료 시간 계산 (YYYYMMDDTHHMMSS 형식)
+    const startDate = date.replace(/-/g, '');
+    const startTime = time.replace(/:/g, '') + '00';
+    const start = `${startDate}T${startTime}`;
+
+    // 종료 시간 계산
+    const [hours, minutes] = time.split(':').map(Number);
+    const endMinutes = hours * 60 + minutes + duration;
+    const endHours = Math.floor(endMinutes / 60);
+    const endMins = endMinutes % 60;
+    const endTime = `${String(endHours).padStart(2, '0')}${String(endMins).padStart(2, '0')}00`;
+    const end = `${startDate}T${endTime}`;
+
+    // 제목
+    const title = `[${interview.type}면접] ${applicantName}`;
+
+    // 상세 내용
+    let details = `지원자: ${applicantName}\n`;
+    details += `면접 유형: ${interview.type}면접\n`;
+    if (postingTitle) details += `공고: ${postingTitle}\n`;
+    if (interview.interviewers) details += `면접관: ${interview.interviewers}\n`;
+
+    // 장소
+    const location = interview.location || '';
+
+    // URL 생성
+    const params = new URLSearchParams({
+        action: 'TEMPLATE',
+        text: title,
+        dates: `${start}/${end}`,
+        details: details,
+        location: location
+    });
+
+    return `${baseUrl}?${params.toString()}`;
+}
+
+window.generateGoogleCalendarUrl = generateGoogleCalendarUrl;
+
 const App = {
     // 앱 상태
     state: {
@@ -667,15 +715,27 @@ const App = {
                 <div>
                     <h3 class="font-semibold mb-3">예정된 면접</h3>
                     <div class="space-y-2">
-                        ${upcomingInterviews.length ? upcomingInterviews.map(i => `
+                        ${upcomingInterviews.length ? upcomingInterviews.map(i => {
+                            const posting = this.state.postings.find(p => p.id === i.posting_id);
+                            const applicantName = i.applicants?.name || '알 수 없음';
+                            const googleCalUrl = generateGoogleCalendarUrl(i, applicantName, posting?.title);
+                            return `
                             <div class="p-3 border rounded-lg hover:bg-gray-50">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-sm font-medium">${escapeHtml(i.applicants?.name) || '알 수 없음'}</span>
-                                    <span class="text-xs px-2 py-0.5 rounded ${i.type === '1차' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}">${escapeHtml(i.type)}면접</span>
+                                    <span class="text-sm font-medium">${escapeHtml(applicantName)}</span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs px-2 py-0.5 rounded ${i.type === '1차' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}">${escapeHtml(i.type)}면접</span>
+                                        <a href="${googleCalUrl}" target="_blank" class="text-blue-500 hover:text-blue-700" title="Google 캘린더에 추가">
+                                            <i class="fab fa-google text-sm"></i>
+                                        </a>
+                                    </div>
                                 </div>
-                                <p class="text-xs text-gray-500 mt-1">${escapeHtml(i.date)} ${escapeHtml(i.time) || ''}</p>
+                                <div class="flex items-center justify-between mt-1">
+                                    <p class="text-xs text-gray-500">${escapeHtml(i.date)} ${escapeHtml(i.time) || ''}</p>
+                                    ${i.location ? `<p class="text-xs text-gray-400">${escapeHtml(i.location)}</p>` : ''}
+                                </div>
                             </div>
-                        `).join('') : '<p class="text-gray-500 text-sm text-center py-4">예정된 면접이 없습니다.</p>'}
+                        `}).join('') : '<p class="text-gray-500 text-sm text-center py-4">예정된 면접이 없습니다.</p>'}
                     </div>
                 </div>
             </div>
