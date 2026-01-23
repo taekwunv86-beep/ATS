@@ -402,6 +402,27 @@ const DB = {
         }
     },
 
+    // 통계용 전체 지원자 조회 (첨부파일 제외, 가벼운 쿼리)
+    async getAllApplicantsForStats(postingIds = null) {
+        try {
+            let query = supabaseClient
+                .from('applicants')
+                .select('id, posting_id, name, status, source, applied_at');
+
+            if (postingIds && postingIds.length > 0) {
+                query = query.in('posting_id', postingIds);
+            }
+
+            const { data, error } = await query;
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('통계용 지원자 조회 실패:', err);
+            return { success: false, error: err.message, data: [] };
+        }
+    },
+
     // =====================================================
     // 면접 관리
     // =====================================================

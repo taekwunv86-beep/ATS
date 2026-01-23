@@ -34,7 +34,10 @@ const App = {
         recruitmentTab: 'postings',
         settingsTab: 'users',
         selectedApplicants: [],
-        loading: false
+        loading: false,
+        // 통계 관련
+        statsApplicants: [],
+        statsSelectedPosting: null  // null = 전체, posting id = 해당 공고
     },
 
     // =====================================================
@@ -98,6 +101,21 @@ const App = {
         } catch (err) {
             console.error('지원자 로드 오류:', err);
             this.state.applicants = [];
+        }
+    },
+
+    // 통계용 전체 지원자 로드
+    async loadStatsData() {
+        try {
+            this.showLoading(true);
+            const accessiblePostingIds = this.getAccessiblePostings().map(p => p.id);
+            const result = await DB.getAllApplicantsForStats(accessiblePostingIds);
+            this.state.statsApplicants = result.data || [];
+            this.showLoading(false);
+        } catch (err) {
+            console.error('통계 데이터 로드 오류:', err);
+            this.state.statsApplicants = [];
+            this.showLoading(false);
         }
     },
 
@@ -665,63 +683,121 @@ const App = {
     },
 
     renderReportsContent() {
-        const postings = this.getAccessiblePostings();
-        const applicants = this.getAccessibleApplicants();
+        const postings = this.getAccessiblePostings().sort((a, b) =>
+            new Date(b.created_at) - new Date(a.created_at)
+        );
+        const allApplicants = this.state.statsApplicants;
 
-        const statusCounts = {
-            received: applicants.filter(a => a.status === 'received').length,
-            reviewing: applicants.filter(a => a.status === 'reviewing').length,
-            interview1: applicants.filter(a => a.status === 'interview1').length,
-            interview2: applicants.filter(a => a.status === 'interview2').length,
-            passed: applicants.filter(a => a.status === 'passed').length,
-            failed: applicants.filter(a => a.status === 'failed').length
+        // 선택된 공고가 없으면 가장 최근 공고를 기본값으로
+        if (this.state.statsSelectedPosting === null && postings.length > 0) {
+            // 초기 로드 시에는 '전체'를 기본값으로 사용하지 않고 가장 최근 공고 선택
+            // 사용자가 명시적으로 '전체'를 선택할 수 있음
+        }
+
+        const selectedPostingId = this.state.statsSelectedPosting;
+        const selectedPosting = selectedPostingId ? postings.find(p => p.id === selectedPostingId) : null;
+
+        // 전체 또는 선택된 공고의 지원자 필터링
+        const filteredApplicants = selectedPostingId
+            ? allApplicants.filter(a => a.posting_id === selectedPostingId)
+            : allApplicants;
+
+        // 전체 통계용 지원자
+        const totalApplicants = allApplicants;
+
+        // 통계 계산 함수
+        const calcStats = (applicants) => {
+            const statusCounts = {
+                received: applicants.filter(a => a.status === 'received').length,
+                reviewing: applicants.filter(a => a.status === 'reviewing').length,
+                interview1: applicants.filter(a => a.status === 'interview1').length,
+                interview2: applicants.filter(a => a.status === 'interview2').length,
+                passed: applicants.filter(a => a.status === 'passed').length,
+                failed: applicants.filter(a => a.status === 'failed').length
+            };
+
+            const sourceCounts = {};
+            applicants.forEach(a => {
+                if (a.source) {
+                    sourceCounts[a.source] = (sourceCounts[a.source] || 0) + 1;
+                }
+            });
+
+            return { statusCounts, sourceCounts, total: applicants.length };
         };
 
-        const sourceCounts = {};
-        applicants.forEach(a => {
-            if (a.source) {
-                sourceCounts[a.source] = (sourceCounts[a.source] || 0) + 1;
-            }
-        });
+        const totalStats = calcStats(totalApplicants);
+        const postingStats = calcStats(filteredApplicants);
+
+        // 통계 렌더링 함수
+        const renderStats = (stats, title) => `
+            <div class="mb-6">
+                <h3 class="font-semibold text-gray-700 mb-4">${title} <span class="text-sm font-normal text-gray-500">(총 ${stats.total}명)</span></h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <h4 class="font-medium text-sm mb-3 text-gray-600">진행 단계별 현황</h4>
+                        <div class="space-y-2 text-sm">
+                            ${[
+                                { label: '서류접수', value: stats.statusCounts.received, color: 'gray' },
+                                { label: '서류심사', value: stats.statusCounts.reviewing, color: 'blue' },
+                                { label: '1차면접', value: stats.statusCounts.interview1, color: 'purple' },
+                                { label: '2차면접', value: stats.statusCounts.interview2, color: 'indigo' },
+                                { label: '합격', value: stats.statusCounts.passed, color: 'green' },
+                                { label: '불합격', value: stats.statusCounts.failed, color: 'red' }
+                            ].map(s => `
+                                <div class="flex items-center gap-2">
+                                    <span class="w-16">${s.label}</span>
+                                    <div class="flex-1 h-2 bg-gray-200 rounded-full">
+                                        <div class="h-2 bg-${s.color}-500 rounded-full" style="width: ${stats.total ? (s.value / stats.total * 100) : 0}%"></div>
+                                    </div>
+                                    <span class="w-10 text-right">${s.value}명</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <h4 class="font-medium text-sm mb-3 text-gray-600">유입 경로별 현황</h4>
+                        <div class="space-y-2 text-sm max-h-48 overflow-y-auto">
+                            ${Object.entries(stats.sourceCounts).sort((a, b) => b[1] - a[1]).map(([source, count]) => `
+                                <div class="flex items-center gap-2">
+                                    <span class="w-20 truncate" title="${escapeHtml(source)}">${escapeHtml(source)}</span>
+                                    <div class="flex-1 h-2 bg-gray-200 rounded-full">
+                                        <div class="h-2 bg-primary-500 rounded-full" style="width: ${stats.total ? (count / stats.total * 100) : 0}%"></div>
+                                    </div>
+                                    <span class="w-10 text-right">${count}명</span>
+                                </div>
+                            `).join('') || '<p class="text-gray-500 text-center py-2">데이터가 없습니다.</p>'}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
 
         return `
             <h2 class="text-lg font-semibold mb-4">채용 통계</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <div class="bg-gray-50 p-4 rounded-lg">
-                    <h3 class="font-medium mb-3">진행 단계별 현황</h3>
-                    <div class="space-y-2 text-sm">
-                        ${[
-                            { label: '서류접수', value: statusCounts.received, color: 'gray' },
-                            { label: '서류심사', value: statusCounts.reviewing, color: 'blue' },
-                            { label: '1차면접', value: statusCounts.interview1, color: 'purple' },
-                            { label: '2차면접', value: statusCounts.interview2, color: 'indigo' },
-                            { label: '합격', value: statusCounts.passed, color: 'green' },
-                            { label: '불합격', value: statusCounts.failed, color: 'red' }
-                        ].map(s => `
-                            <div class="flex items-center gap-2">
-                                <span class="w-16">${s.label}</span>
-                                <div class="flex-1 h-2 bg-gray-200 rounded-full">
-                                    <div class="h-2 bg-${s.color}-500 rounded-full" style="width: ${applicants.length ? (s.value / applicants.length * 100) : 0}%"></div>
-                                </div>
-                                <span class="w-8 text-right">${s.value}</span>
-                            </div>
+
+            <!-- 전체 공고 합계 통계 -->
+            <div class="bg-white border rounded-lg p-4 mb-6">
+                ${renderStats(totalStats, '📊 전체 공고 합계')}
+            </div>
+
+            <!-- 공고별 통계 -->
+            <div class="bg-white border rounded-lg p-4">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-semibold text-gray-700">📋 공고별 통계</h3>
+                    <select id="statsPostingSelect" class="px-3 py-2 border rounded-lg text-sm min-w-64">
+                        ${postings.map((p, idx) => `
+                            <option value="${p.id}" ${(selectedPostingId === p.id) || (!selectedPostingId && idx === 0) ? 'selected' : ''}>
+                                ${escapeHtml(p.title)} (${p.status === 'open' ? '진행중' : p.status === 'closed' ? '마감' : p.status === 'completed' ? '완료' : '작성중'})
+                            </option>
                         `).join('')}
-                    </div>
+                    </select>
                 </div>
-                <div class="bg-gray-50 p-4 rounded-lg">
-                    <h3 class="font-medium mb-3">유입 경로별 현황</h3>
-                    <div class="space-y-2 text-sm">
-                        ${Object.entries(sourceCounts).sort((a, b) => b[1] - a[1]).map(([source, count]) => `
-                            <div class="flex items-center gap-2">
-                                <span class="w-20 truncate">${source}</span>
-                                <div class="flex-1 h-2 bg-gray-200 rounded-full">
-                                    <div class="h-2 bg-primary-500 rounded-full" style="width: ${applicants.length ? (count / applicants.length * 100) : 0}%"></div>
-                                </div>
-                                <span class="w-8 text-right">${count}</span>
-                            </div>
-                        `).join('') || '<p class="text-gray-500">데이터가 없습니다.</p>'}
-                    </div>
-                </div>
+                ${postings.length > 0
+                    ? renderStats(selectedPostingId ? postingStats : calcStats(allApplicants.filter(a => a.posting_id === postings[0]?.id)),
+                        selectedPosting?.title || postings[0]?.title || '선택된 공고')
+                    : '<p class="text-gray-500 text-center py-8">등록된 공고가 없습니다.</p>'
+                }
             </div>
         `;
     },
@@ -951,10 +1027,16 @@ const App = {
 
         // 채용관리 탭 전환
         document.querySelectorAll('.recruitment-tab').forEach(el => {
-            el.onclick = () => {
+            el.onclick = async () => {
                 this.state.recruitmentTab = el.dataset.tab;
                 this.state.selectedPosting = null;
                 this.state.selectedApplicants = [];
+
+                // 통계 탭으로 전환 시 데이터 로드
+                if (el.dataset.tab === 'reports') {
+                    await this.loadStatsData();
+                }
+
                 this.render();
             };
         });
@@ -975,6 +1057,9 @@ const App = {
 
         // 면접 관련 이벤트
         this.bindInterviewEvents();
+
+        // 통계 관련 이벤트
+        this.bindStatsEvents();
 
         // 사용자 관련 이벤트
         this.bindUserEvents();
@@ -1229,6 +1314,17 @@ const App = {
                     this.state.calendarMonth.getMonth() + 1,
                     1
                 );
+                this.render();
+            };
+        }
+    },
+
+    bindStatsEvents() {
+        // 통계 공고 선택 드롭다운
+        const statsPostingSelect = document.getElementById('statsPostingSelect');
+        if (statsPostingSelect) {
+            statsPostingSelect.onchange = () => {
+                this.state.statsSelectedPosting = parseInt(statsPostingSelect.value);
                 this.render();
             };
         }
