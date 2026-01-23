@@ -8,22 +8,36 @@ const Auth = {
     currentUser: null,
     currentProfile: null,
 
-    // 세션 타임아웃 설정 (30분)
-    sessionTimeoutDuration: 30 * 60 * 1000,
+    // 세션 타임아웃 설정 (8시간 - 일반적인 업무 시간 기준)
+    sessionTimeoutDuration: 8 * 60 * 60 * 1000,
     sessionTimeoutId: null,
 
-    // 초기화
+    // 초기화 - 기존 세션 복원
     async init() {
-        // 세션 상태 변경 리스너 (로그인/로그아웃 시에만 동작)
+        // 세션 상태 변경 리스너
         supabaseClient.auth.onAuthStateChange((event, session) => {
             console.log('Auth state changed:', event);
             if (event === 'SIGNED_OUT') {
                 this.clearSession();
+            } else if (event === 'TOKEN_REFRESHED') {
+                console.log('토큰이 자동 갱신되었습니다.');
             }
         });
 
-        // 기존 세션은 체크하지 않음 (새로고침 시 로그인 필요)
-        // 이렇게 하면 로딩이 멈추지 않음
+        // 기존 세션 복원 시도
+        try {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session?.user) {
+                console.log('기존 세션 복원 중...');
+                await this.loadUserProfile(session.user);
+                this.setupActivityListeners();
+                this.resetSessionTimeout();
+                return this.currentProfile;
+            }
+        } catch (err) {
+            console.error('세션 복원 실패:', err);
+        }
+
         return null;
     },
 
