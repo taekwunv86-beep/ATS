@@ -2312,6 +2312,16 @@ const App = {
                         sourceValue = platform !== 'unknown' ? platform : '직접지원';
                     }
 
+                    // 원본 엑셀의 모든 데이터를 extra_data에 저장
+                    const extraData = {};
+                    Object.keys(row).forEach(key => {
+                        // 기본 필드가 아닌 모든 컬럼을 extra_data에 저장
+                        if (key !== nameCol && key !== phoneCol && key !== emailCol &&
+                            key !== educationCol && key !== experienceCol && key !== salaryCol && key !== sourceCol) {
+                            extraData[key] = row[key] || '';
+                        }
+                    });
+
                     applicantsToInsert.push({
                         posting_id: postingId,
                         name: name,
@@ -2321,7 +2331,8 @@ const App = {
                         experience: experienceCol ? row[experienceCol] || '' : '',
                         desired_salary: salaryCol ? row[salaryCol] || '' : '',
                         source: sourceValue,
-                        status: 'received'
+                        status: 'received',
+                        extra_data: extraData
                     });
                 });
 
@@ -2372,18 +2383,39 @@ const App = {
             return;
         }
 
-        const data = applicants.map((a, idx) => ({
-            '순번': idx + 1,
-            '이름': a.name,
-            '연락처': a.phone,
-            '이메일': a.email,
-            '학력': a.education,
-            '경력': a.experience,
-            '지원경로': a.source || '',
-            '지원일': a.applied_at,
-            '상태': DB.getStatusName(a.status),
-            '메모': a.notes || ''
-        }));
+        // 모든 extra_data 컬럼 수집 (중복 제거)
+        const extraColumns = new Set();
+        applicants.forEach(a => {
+            if (a.extra_data && typeof a.extra_data === 'object') {
+                Object.keys(a.extra_data).forEach(key => extraColumns.add(key));
+            }
+        });
+
+        const data = applicants.map((a, idx) => {
+            // 기본 데이터
+            const row = {
+                '순번': idx + 1,
+                '이름': a.name,
+                '연락처': a.phone,
+                '이메일': a.email,
+                '학력': a.education,
+                '경력': a.experience,
+                '희망연봉': a.desired_salary || '',
+                '지원경로': a.source || '',
+                '지원일': a.applied_at,
+                '상태': DB.getStatusName(a.status),
+                '메모': a.notes || ''
+            };
+
+            // extra_data의 모든 컬럼 추가
+            if (a.extra_data && typeof a.extra_data === 'object') {
+                extraColumns.forEach(col => {
+                    row[col] = a.extra_data[col] || '';
+                });
+            }
+
+            return row;
+        });
 
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
