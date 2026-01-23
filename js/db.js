@@ -254,16 +254,65 @@ const DB = {
         }
     },
 
-    // 여러 지원자 일괄 생성 (엑셀 업로드용)
-    async createApplicants(applicantsData) {
+    // 특정 공고의 기존 지원자 이메일 목록 조회
+    async getExistingEmails(postingId) {
         try {
             const { data, error } = await supabaseClient
                 .from('applicants')
-                .insert(applicantsData)
+                .select('email')
+                .eq('posting_id', postingId)
+                .not('email', 'is', null)
+                .neq('email', '');
+
+            if (error) throw error;
+            return { success: true, emails: data.map(d => d.email.toLowerCase().trim()) };
+        } catch (err) {
+            console.error('이메일 목록 조회 실패:', err);
+            return { success: false, emails: [] };
+        }
+    },
+
+    // 여러 지원자 일괄 생성 (엑셀 업로드용) - 이메일 중복 체크 포함
+    async createApplicants(applicantsData, skipDuplicates = true) {
+        try {
+            if (applicantsData.length === 0) {
+                return { success: true, data: [], count: 0, skipped: 0 };
+            }
+
+            let dataToInsert = applicantsData;
+            let skippedCount = 0;
+
+            // 중복 체크가 활성화된 경우
+            if (skipDuplicates) {
+                const postingId = applicantsData[0].posting_id;
+                const existingResult = await this.getExistingEmails(postingId);
+                const existingEmails = new Set(existingResult.emails || []);
+
+                // 새로 추가할 데이터 중에서도 중복 제거
+                const seenEmails = new Set();
+                dataToInsert = applicantsData.filter(a => {
+                    const email = (a.email || '').toLowerCase().trim();
+                    if (!email) return true; // 이메일이 없는 경우는 통과
+                    if (existingEmails.has(email) || seenEmails.has(email)) {
+                        skippedCount++;
+                        return false;
+                    }
+                    seenEmails.add(email);
+                    return true;
+                });
+            }
+
+            if (dataToInsert.length === 0) {
+                return { success: true, data: [], count: 0, skipped: skippedCount };
+            }
+
+            const { data, error } = await supabaseClient
+                .from('applicants')
+                .insert(dataToInsert)
                 .select();
 
             if (error) throw error;
-            return { success: true, data, count: data.length };
+            return { success: true, data, count: data.length, skipped: skippedCount };
         } catch (err) {
             console.error('지원자 일괄 생성 실패:', err);
             return { success: false, error: err.message };

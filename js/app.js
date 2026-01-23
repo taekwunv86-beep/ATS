@@ -1533,6 +1533,18 @@ const App = {
                 result = await DB.updateApplicant(applicant.id, data);
             } else {
                 data.posting_id = this.state.selectedPosting;
+
+                // 이메일 중복 체크
+                if (data.email && data.email.trim()) {
+                    const existingResult = await DB.getExistingEmails(data.posting_id);
+                    const existingEmails = existingResult.emails || [];
+                    if (existingEmails.includes(data.email.toLowerCase().trim())) {
+                        alert('이미 동일한 이메일의 지원자가 등록되어 있습니다.');
+                        this.showLoading(false);
+                        return false;
+                    }
+                }
+
                 result = await DB.createApplicant(data);
             }
 
@@ -2292,7 +2304,12 @@ const App = {
                 if (result.success) {
                     await this.loadApplicants(postingId);
                     this.render();
-                    alert(`${platform !== 'unknown' ? platform + ' 형식으로 감지되었습니다.\n' : ''}${result.count}명의 지원자가 추가되었습니다.`);
+                    let message = platform !== 'unknown' ? platform + ' 형식으로 감지되었습니다.\n' : '';
+                    message += `${result.count}명의 지원자가 추가되었습니다.`;
+                    if (result.skipped > 0) {
+                        message += `\n(이메일 중복으로 ${result.skipped}명 제외)`;
+                    }
+                    alert(message);
                 } else {
                     alert('지원자 추가에 실패했습니다.');
                 }
