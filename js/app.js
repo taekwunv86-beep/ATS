@@ -1342,9 +1342,17 @@ const App = {
 
         // 지원자 상세 보기
         document.querySelectorAll('.view-applicant-btn').forEach(el => {
-            el.onclick = () => {
-                const applicant = this.state.applicants.find(a => a.id === parseInt(el.dataset.id));
-                this.showApplicantDetailModal(applicant);
+            el.onclick = async () => {
+                const applicantId = parseInt(el.dataset.id);
+                this.showLoading(true);
+                // 항상 DB에서 최신 데이터 로드 (첨부파일 포함)
+                const result = await DB.getApplicant(applicantId);
+                this.showLoading(false);
+                if (result.success) {
+                    this.showApplicantDetailModal(result.data);
+                } else {
+                    alert('지원자 정보를 불러올 수 없습니다.');
+                }
             };
         });
 
