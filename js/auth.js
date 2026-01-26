@@ -8,9 +8,11 @@ const Auth = {
     currentUser: null,
     currentProfile: null,
 
-    // 세션 타임아웃 설정 (8시간 - 일반적인 업무 시간 기준)
-    sessionTimeoutDuration: 8 * 60 * 60 * 1000,
+    // 세션 타임아웃 설정 (1시간 비활동 시 로그아웃)
+    sessionTimeoutDuration: 60 * 60 * 1000, // 1시간
     sessionTimeoutId: null,
+    lastActivityTime: 0, // 마지막 활동 시간 (쓰로틀링용)
+    activityThrottle: 60 * 1000, // 활동 감지 쓰로틀링 간격 (1분)
 
     // 초기화 - 기존 세션 복원
     async init() {
@@ -316,6 +318,7 @@ const Auth = {
     // 세션 타임아웃 리셋
     resetSessionTimeout() {
         this.clearSessionTimeout();
+        this.lastActivityTime = Date.now();
 
         if (this.currentProfile) {
             this.sessionTimeoutId = setTimeout(() => {
@@ -343,17 +346,24 @@ const Auth = {
 
     // 활동 감지 이벤트 리스너 설정
     setupActivityListeners() {
-        const activityEvents = ['click', 'keydown', 'mousemove', 'scroll', 'touchstart'];
-        const resetTimeout = () => {
-            if (this.currentProfile) {
+        const activityEvents = ['click', 'keydown', 'scroll', 'touchstart']; // mousemove 제외 (너무 민감)
+
+        // 쓰로틀링된 활동 감지 핸들러
+        const throttledResetTimeout = () => {
+            if (!this.currentProfile) return;
+
+            const now = Date.now();
+            // 마지막 활동으로부터 1분 이상 지났을 때만 타이머 리셋
+            if (now - this.lastActivityTime > this.activityThrottle) {
+                this.lastActivityTime = now;
                 this.resetSessionTimeout();
             }
         };
 
         // 이벤트 리스너 등록
         activityEvents.forEach(event => {
-            document.removeEventListener(event, resetTimeout);
-            document.addEventListener(event, resetTimeout, { passive: true });
+            document.removeEventListener(event, throttledResetTimeout);
+            document.addEventListener(event, throttledResetTimeout, { passive: true });
         });
     },
 
