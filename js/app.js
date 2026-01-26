@@ -77,7 +77,7 @@ const App = {
         selectedPosting: null,
         filters: { status: '', search: '' },
         sortBy: { field: 'applied_at', order: 'desc' },
-        pagination: { page: 1, perPage: 10 },
+        pagination: { page: 1, perPage: 20 },
         calendarMonth: new Date(),
         recruitmentTab: 'postings',
         settingsTab: 'users',
@@ -533,16 +533,84 @@ const App = {
             );
         }
 
+        // 상태 정렬 순서 정의
+        const statusOrder = {
+            'received': 1,
+            'reviewing': 2,
+            'interview1': 3,
+            'interview2': 4,
+            'passed': 5,
+            'failed': 6
+        };
+
         // 정렬
         applicants.sort((a, b) => {
             const field = this.state.sortBy.field;
             const order = this.state.sortBy.order === 'asc' ? 1 : -1;
+
+            // 상태 정렬의 경우 특별 처리
+            if (field === 'status') {
+                const aVal = statusOrder[a.status] || 99;
+                const bVal = statusOrder[b.status] || 99;
+                return (aVal - bVal) * order;
+            }
+
             const aVal = a[field] || '';
             const bVal = b[field] || '';
             if (aVal < bVal) return -1 * order;
             if (aVal > bVal) return 1 * order;
             return 0;
         });
+
+        // 페이지네이션 계산
+        const totalCount = applicants.length;
+        const perPage = this.state.pagination.perPage;
+        const totalPages = Math.ceil(totalCount / perPage);
+        const currentPage = Math.min(this.state.pagination.page, totalPages) || 1;
+        const startIdx = (currentPage - 1) * perPage;
+        const endIdx = startIdx + perPage;
+        const paginatedApplicants = applicants.slice(startIdx, endIdx);
+
+        // 페이지네이션 UI 생성
+        const renderPagination = () => {
+            if (totalPages <= 1) return '';
+
+            let pages = [];
+            const maxVisiblePages = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+            if (endPage - startPage + 1 < maxVisiblePages) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                pages.push(i);
+            }
+
+            return `
+                <div class="flex items-center justify-center gap-2 mt-4">
+                    <button class="pagination-btn px-3 py-1 border rounded ${currentPage === 1 ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-gray-100'}" data-page="1" ${currentPage === 1 ? 'disabled' : ''}>
+                        <i class="fas fa-angle-double-left"></i>
+                    </button>
+                    <button class="pagination-btn px-3 py-1 border rounded ${currentPage === 1 ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-gray-100'}" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}>
+                        <i class="fas fa-angle-left"></i>
+                    </button>
+                    ${pages.map(p => `
+                        <button class="pagination-btn px-3 py-1 border rounded ${p === currentPage ? 'bg-primary-500 text-white' : 'hover:bg-gray-100'}" data-page="${p}">
+                            ${p}
+                        </button>
+                    `).join('')}
+                    <button class="pagination-btn px-3 py-1 border rounded ${currentPage === totalPages ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-gray-100'}" data-page="${currentPage + 1}" ${currentPage === totalPages ? 'disabled' : ''}>
+                        <i class="fas fa-angle-right"></i>
+                    </button>
+                    <button class="pagination-btn px-3 py-1 border rounded ${currentPage === totalPages ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-gray-100'}" data-page="${totalPages}" ${currentPage === totalPages ? 'disabled' : ''}>
+                        <i class="fas fa-angle-double-right"></i>
+                    </button>
+                    <span class="text-sm text-gray-500 ml-2">${totalCount}명 중 ${startIdx + 1}-${Math.min(endIdx, totalCount)}명</span>
+                </div>
+            `;
+        };
 
         return `
             <div class="flex items-center gap-4 mb-4">
@@ -551,7 +619,7 @@ const App = {
                 </button>
                 <div class="flex-1">
                     <h2 class="text-lg font-semibold">${escapeHtml(posting.title)}</h2>
-                    <p class="text-sm text-gray-500">${escapeHtml(posting.department) || ''} · 모집 ${posting.headcount}명</p>
+                    <p class="text-sm text-gray-500">${escapeHtml(posting.department) || ''} · 모집 ${posting.headcount}명 · 지원자 ${this.state.applicants.length}명</p>
                 </div>
                 ${this.state.selectedApplicants.length > 0 ? `
                 <button id="downloadAttachmentsBtn" class="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm">
@@ -580,6 +648,14 @@ const App = {
                     <option value="passed" ${this.state.filters.status === 'passed' ? 'selected' : ''}>합격</option>
                     <option value="failed" ${this.state.filters.status === 'failed' ? 'selected' : ''}>불합격</option>
                 </select>
+                <select id="sortBySelect" class="px-4 py-2 border rounded-lg text-sm">
+                    <option value="applied_at-desc" ${this.state.sortBy.field === 'applied_at' && this.state.sortBy.order === 'desc' ? 'selected' : ''}>최근 지원순</option>
+                    <option value="applied_at-asc" ${this.state.sortBy.field === 'applied_at' && this.state.sortBy.order === 'asc' ? 'selected' : ''}>오래된 순</option>
+                    <option value="name-asc" ${this.state.sortBy.field === 'name' && this.state.sortBy.order === 'asc' ? 'selected' : ''}>이름순 (가나다)</option>
+                    <option value="name-desc" ${this.state.sortBy.field === 'name' && this.state.sortBy.order === 'desc' ? 'selected' : ''}>이름순 (역순)</option>
+                    <option value="status-asc" ${this.state.sortBy.field === 'status' && this.state.sortBy.order === 'asc' ? 'selected' : ''}>상태순 (서류접수→합격)</option>
+                    <option value="status-desc" ${this.state.sortBy.field === 'status' && this.state.sortBy.order === 'desc' ? 'selected' : ''}>상태순 (합격→서류접수)</option>
+                </select>
             </div>
 
             <div class="overflow-x-auto">
@@ -600,7 +676,7 @@ const App = {
                         </tr>
                     </thead>
                     <tbody>
-                        ${applicants.map(a => `
+                        ${paginatedApplicants.length > 0 ? paginatedApplicants.map(a => `
                             <tr class="border-t hover:bg-gray-50">
                                 <td class="px-3 py-2 text-center">
                                     <input type="checkbox" class="applicant-checkbox w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" data-applicant-id="${a.id}" ${this.state.selectedApplicants.includes(a.id) ? 'checked' : ''}>
@@ -635,7 +711,7 @@ const App = {
                                     </div>
                                 </td>
                             </tr>
-                        `).join('') || `
+                        `).join('') : `
                             <tr>
                                 <td colspan="9" class="px-4 py-8 text-center text-gray-500">
                                     지원자가 없습니다. 엑셀 파일을 업로드하거나 직접 추가하세요.
@@ -645,6 +721,7 @@ const App = {
                     </tbody>
                 </table>
             </div>
+            ${renderPagination()}
             <input type="file" id="excelFileInput" class="hidden" accept=".xlsx,.xls">
         `;
     },
@@ -1148,6 +1225,8 @@ const App = {
                 this.state.selectedPosting = postingId;
                 this.state.selectedApplicants = [];
                 this.state.filters = { status: '', search: '' };
+                this.state.pagination.page = 1; // 공고 변경 시 첫 페이지로
+                this.state.sortBy = { field: 'applied_at', order: 'desc' }; // 정렬 초기화
                 this.showLoading(true);
                 await this.loadApplicants(postingId);
                 this.showLoading(false);
@@ -1161,6 +1240,7 @@ const App = {
             backBtn.onclick = () => {
                 this.state.selectedPosting = null;
                 this.state.selectedApplicants = [];
+                this.state.pagination.page = 1; // 페이지 초기화
                 this.render();
             };
         }
@@ -1236,6 +1316,7 @@ const App = {
                 clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(() => {
                     this.state.filters.search = searchInput.value;
+                    this.state.pagination.page = 1; // 검색 시 첫 페이지로
                     this.render();
                 }, 300);
             };
@@ -1246,6 +1327,7 @@ const App = {
         if (statusFilter) {
             statusFilter.onchange = () => {
                 this.state.filters.status = statusFilter.value;
+                this.state.pagination.page = 1; // 필터 변경 시 첫 페이지로
                 this.render();
             };
         }
@@ -1350,6 +1432,28 @@ const App = {
         const downloadAttachmentsBtn = document.getElementById('downloadAttachmentsBtn');
         if (downloadAttachmentsBtn) {
             downloadAttachmentsBtn.onclick = () => this.downloadSelectedApplicantsAttachments();
+        }
+
+        // 페이지네이션 버튼
+        document.querySelectorAll('.pagination-btn').forEach(btn => {
+            btn.onclick = () => {
+                const page = parseInt(btn.dataset.page);
+                if (page && page > 0) {
+                    this.state.pagination.page = page;
+                    this.render();
+                }
+            };
+        });
+
+        // 정렬 드롭다운
+        const sortBySelect = document.getElementById('sortBySelect');
+        if (sortBySelect) {
+            sortBySelect.onchange = () => {
+                const [field, order] = sortBySelect.value.split('-');
+                this.state.sortBy = { field, order };
+                this.state.pagination.page = 1; // 정렬 변경 시 첫 페이지로
+                this.render();
+            };
         }
     },
 

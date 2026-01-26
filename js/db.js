@@ -240,11 +240,23 @@ const DB = {
     // 지원자 생성
     async createApplicant(applicantData) {
         try {
-            const { data, error } = await supabaseClient
+            let { data, error } = await supabaseClient
                 .from('applicants')
                 .insert(applicantData)
                 .select()
                 .single();
+
+            // extra_data 컬럼 관련 에러시 extra_data 제외하고 재시도
+            if (error && (error.message.includes('extra_data') || error.code === '42703')) {
+                const { extra_data, ...dataWithoutExtra } = applicantData;
+                const retry = await supabaseClient
+                    .from('applicants')
+                    .insert(dataWithoutExtra)
+                    .select()
+                    .single();
+                data = retry.data;
+                error = retry.error;
+            }
 
             if (error) throw error;
             return { success: true, data };
@@ -306,10 +318,23 @@ const DB = {
                 return { success: true, data: [], count: 0, skipped: skippedCount };
             }
 
-            const { data, error } = await supabaseClient
+            // 먼저 extra_data 포함해서 시도
+            let { data, error } = await supabaseClient
                 .from('applicants')
                 .insert(dataToInsert)
                 .select();
+
+            // extra_data 컬럼 관련 에러시 extra_data 제외하고 재시도
+            if (error && (error.message.includes('extra_data') || error.code === '42703')) {
+                console.log('extra_data 컬럼이 없습니다. 해당 필드 제외 후 재시도...');
+                const dataWithoutExtra = dataToInsert.map(({ extra_data, ...rest }) => rest);
+                const retry = await supabaseClient
+                    .from('applicants')
+                    .insert(dataWithoutExtra)
+                    .select();
+                data = retry.data;
+                error = retry.error;
+            }
 
             if (error) throw error;
             return { success: true, data, count: data.length, skipped: skippedCount };
