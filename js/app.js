@@ -85,7 +85,10 @@ const App = {
         loading: false,
         // 통계 관련
         statsApplicants: [],
-        statsSelectedPosting: null  // null = 전체, posting id = 해당 공고
+        statsSelectedPosting: null,  // null = 전체, posting id = 해당 공고
+        // 관리자 평가 관련
+        adminUsers: [],
+        evaluations: {}  // { `${applicantId}_${userId}`: 'O' | 'X' }
     },
 
     // =====================================================
@@ -144,11 +147,26 @@ const App = {
     // 지원자 로드
     async loadApplicants(postingId) {
         try {
+            // 지원자 로드
             const result = await DB.getApplicants(postingId);
             this.state.applicants = result.data || [];
+
+            // 관리자 목록 로드
+            const adminResult = await DB.getAdminUsers();
+            this.state.adminUsers = adminResult.data || [];
+
+            // 평가 데이터 로드
+            const evalResult = await DB.getEvaluations(postingId);
+            const evaluations = {};
+            (evalResult.data || []).forEach(e => {
+                evaluations[`${e.applicant_id}_${e.user_id}`] = e.evaluation;
+            });
+            this.state.evaluations = evaluations;
         } catch (err) {
             console.error('지원자 로드 오류:', err);
             this.state.applicants = [];
+            this.state.adminUsers = [];
+            this.state.evaluations = {};
         }
     },
 
@@ -543,6 +561,16 @@ const App = {
             'failed': 6
         };
 
+        // 평가 카운트 계산 함수
+        const countEvaluations = (applicantId, evalType) => {
+            let count = 0;
+            this.state.adminUsers.forEach(admin => {
+                const key = `${applicantId}_${admin.id}`;
+                if (this.state.evaluations[key] === evalType) count++;
+            });
+            return count;
+        };
+
         // 정렬
         applicants.sort((a, b) => {
             const field = this.state.sortBy.field;
@@ -553,6 +581,20 @@ const App = {
                 const aVal = statusOrder[a.status] || 99;
                 const bVal = statusOrder[b.status] || 99;
                 return (aVal - bVal) * order;
+            }
+
+            // 평가 O 개수로 정렬
+            if (field === 'eval_o') {
+                const aVal = countEvaluations(a.id, 'O');
+                const bVal = countEvaluations(b.id, 'O');
+                return (bVal - aVal) * order; // 많은 순이 기본
+            }
+
+            // 평가 X 개수로 정렬
+            if (field === 'eval_x') {
+                const aVal = countEvaluations(a.id, 'X');
+                const bVal = countEvaluations(b.id, 'X');
+                return (bVal - aVal) * order; // 많은 순이 기본
             }
 
             const aVal = a[field] || '';
@@ -655,6 +697,8 @@ const App = {
                     <option value="name-desc" ${this.state.sortBy.field === 'name' && this.state.sortBy.order === 'desc' ? 'selected' : ''}>이름순 (역순)</option>
                     <option value="status-asc" ${this.state.sortBy.field === 'status' && this.state.sortBy.order === 'asc' ? 'selected' : ''}>상태순 (서류접수→합격)</option>
                     <option value="status-desc" ${this.state.sortBy.field === 'status' && this.state.sortBy.order === 'desc' ? 'selected' : ''}>상태순 (합격→서류접수)</option>
+                    <option value="eval_o-desc" ${this.state.sortBy.field === 'eval_o' && this.state.sortBy.order === 'desc' ? 'selected' : ''}>평가 O 많은순</option>
+                    <option value="eval_x-desc" ${this.state.sortBy.field === 'eval_x' && this.state.sortBy.order === 'desc' ? 'selected' : ''}>평가 X 많은순</option>
                 </select>
             </div>
 
@@ -668,9 +712,13 @@ const App = {
                             <th class="px-3 py-2 text-left font-semibold text-gray-600">이름</th>
                             <th class="px-3 py-2 text-left font-semibold text-gray-600">연락처</th>
                             <th class="px-3 py-2 text-left font-semibold text-gray-600">이메일</th>
-                            <th class="px-3 py-2 text-left font-semibold text-gray-600">학력</th>
                             <th class="px-3 py-2 text-left font-semibold text-gray-600">경력</th>
                             <th class="px-3 py-2 text-left font-semibold text-gray-600">지원일</th>
+                            ${this.state.adminUsers.map(admin => `
+                                <th class="px-2 py-2 text-center font-semibold text-gray-600 min-w-16" title="${escapeHtml(admin.email)}">
+                                    ${escapeHtml(admin.name)}
+                                </th>
+                            `).join('')}
                             <th class="px-3 py-2 text-left font-semibold text-gray-600">상태</th>
                             <th class="px-3 py-2 text-left font-semibold text-gray-600">관리</th>
                         </tr>
@@ -684,9 +732,26 @@ const App = {
                                 <td class="px-3 py-2 font-medium">${escapeHtml(a.name)}</td>
                                 <td class="px-3 py-2 text-gray-600">${escapeHtml(a.phone) || '-'}</td>
                                 <td class="px-3 py-2 text-gray-600">${escapeHtml(a.email) || '-'}</td>
-                                <td class="px-3 py-2 text-gray-600">${escapeHtml(a.education) || '-'}</td>
                                 <td class="px-3 py-2 text-gray-600">${escapeHtml(a.experience) || '-'}</td>
                                 <td class="px-3 py-2 text-gray-600">${a.applied_at || '-'}</td>
+                                ${this.state.adminUsers.map(admin => {
+                                    const evalKey = `${a.id}_${admin.id}`;
+                                    const evalValue = this.state.evaluations[evalKey];
+                                    return `
+                                        <td class="px-2 py-2 text-center">
+                                            <div class="flex justify-center gap-1">
+                                                <button class="eval-btn eval-o-btn w-7 h-7 rounded text-sm font-bold transition-all ${evalValue === 'O' ? 'bg-blue-500 text-white shadow-md' : 'bg-gray-100 text-gray-400 hover:bg-blue-100 hover:text-blue-500'}"
+                                                    data-applicant-id="${a.id}" data-user-id="${admin.id}" data-eval="O" title="O 선택">
+                                                    O
+                                                </button>
+                                                <button class="eval-btn eval-x-btn w-7 h-7 rounded text-sm font-bold transition-all ${evalValue === 'X' ? 'bg-red-500 text-white shadow-md' : 'bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-500'}"
+                                                    data-applicant-id="${a.id}" data-user-id="${admin.id}" data-eval="X" title="X 선택">
+                                                    X
+                                                </button>
+                                            </div>
+                                        </td>
+                                    `;
+                                }).join('')}
                                 <td class="px-3 py-2">
                                     <select class="applicant-status-select text-xs border rounded px-2 py-1" data-applicant-id="${a.id}">
                                         <option value="received" ${a.status === 'received' ? 'selected' : ''}>서류접수</option>
@@ -713,7 +778,7 @@ const App = {
                             </tr>
                         `).join('') : `
                             <tr>
-                                <td colspan="9" class="px-4 py-8 text-center text-gray-500">
+                                <td colspan="${8 + this.state.adminUsers.length}" class="px-4 py-8 text-center text-gray-500">
                                     지원자가 없습니다. 엑셀 파일을 업로드하거나 직접 추가하세요.
                                 </td>
                             </tr>
@@ -1441,6 +1506,33 @@ const App = {
         if (downloadAttachmentsBtn) {
             downloadAttachmentsBtn.onclick = () => this.downloadSelectedApplicantsAttachments();
         }
+
+        // 평가 O/X 버튼
+        document.querySelectorAll('.eval-btn').forEach(btn => {
+            btn.onclick = async () => {
+                const applicantId = parseInt(btn.dataset.applicantId);
+                const userId = btn.dataset.userId;
+                const evalValue = btn.dataset.eval;
+                const evalKey = `${applicantId}_${userId}`;
+                const currentValue = this.state.evaluations[evalKey];
+
+                // 같은 버튼을 다시 클릭하면 선택 해제
+                if (currentValue === evalValue) {
+                    const result = await DB.deleteEvaluation(applicantId, userId);
+                    if (result.success) {
+                        delete this.state.evaluations[evalKey];
+                        this.render();
+                    }
+                } else {
+                    // 다른 값 선택
+                    const result = await DB.setEvaluation(applicantId, userId, evalValue);
+                    if (result.success) {
+                        this.state.evaluations[evalKey] = evalValue;
+                        this.render();
+                    }
+                }
+            };
+        });
 
         // 페이지네이션 버튼
         document.querySelectorAll('.pagination-btn').forEach(btn => {

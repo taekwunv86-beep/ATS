@@ -647,6 +647,88 @@ const DB = {
     },
 
     // =====================================================
+    // 관리자 평가 관련
+    // =====================================================
+
+    // 특정 공고의 모든 평가 조회
+    async getEvaluations(postingId) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('applicant_evaluations')
+                .select(`
+                    *,
+                    applicants!inner(posting_id)
+                `)
+                .eq('applicants.posting_id', postingId);
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('평가 목록 조회 실패:', err);
+            return { success: false, error: err.message, data: [] };
+        }
+    },
+
+    // 평가 저장 (upsert)
+    async setEvaluation(applicantId, userId, evaluation) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('applicant_evaluations')
+                .upsert({
+                    applicant_id: applicantId,
+                    user_id: userId,
+                    evaluation: evaluation,
+                    updated_at: new Date().toISOString()
+                }, {
+                    onConflict: 'applicant_id,user_id'
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('평가 저장 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 평가 삭제 (선택 해제)
+    async deleteEvaluation(applicantId, userId) {
+        try {
+            const { error } = await supabaseClient
+                .from('applicant_evaluations')
+                .delete()
+                .eq('applicant_id', applicantId)
+                .eq('user_id', userId);
+
+            if (error) throw error;
+            return { success: true };
+        } catch (err) {
+            console.error('평가 삭제 실패:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    // 관리자 목록 조회 (admin, super_admin)
+    async getAdminUsers() {
+        try {
+            const { data, error } = await supabaseClient
+                .from('profiles')
+                .select('id, name, email, role')
+                .in('role', ['admin', 'super_admin'])
+                .eq('is_active', true)
+                .order('name');
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err) {
+            console.error('관리자 목록 조회 실패:', err);
+            return { success: false, error: err.message, data: [] };
+        }
+    },
+
+    // =====================================================
     // 유틸리티 함수
     // =====================================================
 
