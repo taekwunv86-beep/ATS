@@ -587,14 +587,14 @@ const App = {
             if (field === 'eval_o') {
                 const aVal = countEvaluations(a.id, 'O');
                 const bVal = countEvaluations(b.id, 'O');
-                return (bVal - aVal) * order; // 많은 순이 기본
+                return (aVal - bVal) * order; // desc(-1)일 때 많은 순
             }
 
             // 평가 X 개수로 정렬
             if (field === 'eval_x') {
                 const aVal = countEvaluations(a.id, 'X');
                 const bVal = countEvaluations(b.id, 'X');
-                return (bVal - aVal) * order; // 많은 순이 기본
+                return (aVal - bVal) * order; // desc(-1)일 때 많은 순
             }
 
             const aVal = a[field] || '';
@@ -1516,12 +1516,17 @@ const App = {
                 const evalKey = `${applicantId}_${userId}`;
                 const currentValue = this.state.evaluations[evalKey];
 
+                // 스크롤 위치 저장
+                const scrollPosition = window.scrollY;
+
                 // 같은 버튼을 다시 클릭하면 선택 해제
                 if (currentValue === evalValue) {
                     const result = await DB.deleteEvaluation(applicantId, userId);
                     if (result.success) {
                         delete this.state.evaluations[evalKey];
                         this.render();
+                        // 스크롤 위치 복원
+                        window.scrollTo(0, scrollPosition);
                     }
                 } else {
                     // 다른 값 선택
@@ -1529,6 +1534,8 @@ const App = {
                     if (result.success) {
                         this.state.evaluations[evalKey] = evalValue;
                         this.render();
+                        // 스크롤 위치 복원
+                        window.scrollTo(0, scrollPosition);
                     }
                 }
             };
@@ -1966,7 +1973,7 @@ const App = {
         modal.innerHTML = `
             <div class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                 <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-auto">
-                    <div class="flex items-center justify-between p-6 border-b">
+                    <div class="flex items-center justify-between p-6 border-b sticky top-0 bg-white z-10 rounded-t-2xl">
                         <h2 class="text-xl font-bold">지원자 상세정보</h2>
                         <button id="closeDetailModal" class="p-2 hover:bg-gray-100 rounded-lg">
                             <i class="fas fa-times"></i>
