@@ -1526,19 +1526,38 @@ const App = {
                 const evalKey = `${applicantId}_${userId}`;
                 const currentValue = this.state.evaluations[evalKey];
 
+                // 같은 지원자의 O/X 버튼들 찾기
+                const container = btn.parentElement;
+                const oBtn = container.querySelector('.eval-o-btn');
+                const xBtn = container.querySelector('.eval-x-btn');
+
                 // 같은 버튼을 다시 클릭하면 선택 해제
                 if (currentValue === evalValue) {
                     const result = await DB.deleteEvaluation(applicantId, userId);
                     if (result.success) {
                         delete this.state.evaluations[evalKey];
-                        this.render(true); // 스크롤 위치 유지
+                        // 버튼 스타일 직접 업데이트 (선택 해제)
+                        btn.className = btn.className
+                            .replace('bg-blue-500 text-white shadow-md', 'bg-gray-100 text-gray-400 hover:bg-blue-100 hover:text-blue-500')
+                            .replace('bg-red-500 text-white shadow-md', 'bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-500');
                     }
                 } else {
                     // 다른 값 선택
                     const result = await DB.setEvaluation(applicantId, userId, evalValue);
                     if (result.success) {
                         this.state.evaluations[evalKey] = evalValue;
-                        this.render(true); // 스크롤 위치 유지
+                        // 버튼 스타일 직접 업데이트
+                        if (evalValue === 'O') {
+                            oBtn.className = oBtn.className
+                                .replace('bg-gray-100 text-gray-400 hover:bg-blue-100 hover:text-blue-500', 'bg-blue-500 text-white shadow-md');
+                            xBtn.className = xBtn.className
+                                .replace('bg-red-500 text-white shadow-md', 'bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-500');
+                        } else {
+                            xBtn.className = xBtn.className
+                                .replace('bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-500', 'bg-red-500 text-white shadow-md');
+                            oBtn.className = oBtn.className
+                                .replace('bg-blue-500 text-white shadow-md', 'bg-gray-100 text-gray-400 hover:bg-blue-100 hover:text-blue-500');
+                        }
                     }
                 }
             };
