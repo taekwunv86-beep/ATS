@@ -288,8 +288,11 @@ const App = {
     // 렌더링
     // =====================================================
 
-    render() {
+    render(preserveScroll = false) {
         const app = document.getElementById('app');
+
+        // 스크롤 위치 저장
+        const scrollPosition = preserveScroll ? window.scrollY : 0;
 
         if (!this.state.currentUser) {
             app.innerHTML = this.renderLoginPage();
@@ -298,6 +301,13 @@ const App = {
         }
 
         this.bindEvents();
+
+        // 스크롤 위치 복원
+        if (preserveScroll) {
+            setTimeout(() => {
+                window.scrollTo(0, scrollPosition);
+            }, 0);
+        }
     },
 
     // =====================================================
@@ -1516,30 +1526,19 @@ const App = {
                 const evalKey = `${applicantId}_${userId}`;
                 const currentValue = this.state.evaluations[evalKey];
 
-                // 스크롤 위치 저장
-                const scrollPosition = window.scrollY;
-
                 // 같은 버튼을 다시 클릭하면 선택 해제
                 if (currentValue === evalValue) {
                     const result = await DB.deleteEvaluation(applicantId, userId);
                     if (result.success) {
                         delete this.state.evaluations[evalKey];
-                        this.render();
-                        // DOM 업데이트 후 스크롤 위치 복원 (딜레이 적용)
-                        setTimeout(() => {
-                            window.scrollTo(0, scrollPosition);
-                        }, 50);
+                        this.render(true); // 스크롤 위치 유지
                     }
                 } else {
                     // 다른 값 선택
                     const result = await DB.setEvaluation(applicantId, userId, evalValue);
                     if (result.success) {
                         this.state.evaluations[evalKey] = evalValue;
-                        this.render();
-                        // DOM 업데이트 후 스크롤 위치 복원 (딜레이 적용)
-                        setTimeout(() => {
-                            window.scrollTo(0, scrollPosition);
-                        }, 50);
+                        this.render(true); // 스크롤 위치 유지
                     }
                 }
             };
