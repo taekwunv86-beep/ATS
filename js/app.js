@@ -1525,8 +1525,10 @@ const App = {
                     if (result.success) {
                         delete this.state.evaluations[evalKey];
                         this.render();
-                        // 스크롤 위치 복원
-                        window.scrollTo(0, scrollPosition);
+                        // DOM 업데이트 후 스크롤 위치 복원
+                        requestAnimationFrame(() => {
+                            window.scrollTo(0, scrollPosition);
+                        });
                     }
                 } else {
                     // 다른 값 선택
@@ -1534,8 +1536,10 @@ const App = {
                     if (result.success) {
                         this.state.evaluations[evalKey] = evalValue;
                         this.render();
-                        // 스크롤 위치 복원
-                        window.scrollTo(0, scrollPosition);
+                        // DOM 업데이트 후 스크롤 위치 복원
+                        requestAnimationFrame(() => {
+                            window.scrollTo(0, scrollPosition);
+                        });
                     }
                 }
             };
