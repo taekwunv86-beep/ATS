@@ -1525,10 +1525,10 @@ const App = {
                     if (result.success) {
                         delete this.state.evaluations[evalKey];
                         this.render();
-                        // DOM 업데이트 후 스크롤 위치 복원
-                        requestAnimationFrame(() => {
+                        // DOM 업데이트 후 스크롤 위치 복원 (딜레이 적용)
+                        setTimeout(() => {
                             window.scrollTo(0, scrollPosition);
-                        });
+                        }, 50);
                     }
                 } else {
                     // 다른 값 선택
@@ -1536,10 +1536,10 @@ const App = {
                     if (result.success) {
                         this.state.evaluations[evalKey] = evalValue;
                         this.render();
-                        // DOM 업데이트 후 스크롤 위치 복원
-                        requestAnimationFrame(() => {
+                        // DOM 업데이트 후 스크롤 위치 복원 (딜레이 적용)
+                        setTimeout(() => {
                             window.scrollTo(0, scrollPosition);
-                        });
+                        }, 50);
                     }
                 }
             };
