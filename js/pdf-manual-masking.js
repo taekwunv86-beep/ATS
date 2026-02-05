@@ -448,58 +448,98 @@ const PdfManualMasking = {
     },
 
     /**
-     * PDF에 마스킹 적용
+     * PDF에 마스킹 적용 (페이지를 이미지로 플래튼하여 텍스트 복사 방지)
      */
     async applyMaskingToPdf() {
-        const { PDFDocument, rgb } = PDFLib;
+        const { PDFDocument } = PDFLib;
 
-        // PDF 로드
-        const pdfDoc = await PDFDocument.load(this.state.arrayBuffer.slice(0));
-        const pages = pdfDoc.getPages();
+        // 마스킹이 필요한 페이지 번호 목록
+        const pagesToFlatten = [...new Set(this.state.selectedRegions.map(r => r.page))];
 
-        // 각 선택 영역에 마스킹 적용
-        for (const region of this.state.selectedRegions) {
-            const page = pages[region.page - 1];
-            if (!page) continue;
+        // 새 PDF 문서 생성
+        const newPdfDoc = await PDFDocument.create();
 
-            const { width: pageWidth, height: pageHeight } = page.getSize();
+        // 원본 PDF에서 각 페이지 처리
+        for (let pageNum = 1; pageNum <= this.state.totalPages; pageNum++) {
+            if (pagesToFlatten.includes(pageNum)) {
+                // 마스킹이 필요한 페이지: 이미지로 플래튼
+                const imageBytes = await this.renderPageAsImage(pageNum);
+                const image = await newPdfDoc.embedPng(imageBytes);
 
-            // 스케일 보정하여 실제 PDF 좌표로 변환
-            const scaleFactor = 1 / region.scale;
-            const pdfX = region.x * scaleFactor;
-            const pdfWidth = region.width * scaleFactor;
-            const pdfHeight = region.height * scaleFactor;
-            // PDF 좌표계는 좌하단이 원점이므로 y 변환
-            const pdfY = pageHeight - (region.y * scaleFactor) - pdfHeight;
+                // 원본 페이지 크기 가져오기
+                const originalPage = await this.state.pdfDoc.getPage(pageNum);
+                const viewport = originalPage.getViewport({ scale: 1.0 });
 
-            // 흰색 박스 그리기
-            page.drawRectangle({
-                x: pdfX,
-                y: pdfY,
-                width: pdfWidth,
-                height: pdfHeight,
-                color: rgb(1, 1, 1), // 흰색
-                borderColor: rgb(0.85, 0.85, 0.85),
-                borderWidth: 0.5,
-            });
+                // 새 페이지 추가 (원본 크기 유지)
+                const newPage = newPdfDoc.addPage([viewport.width, viewport.height]);
 
-            // "***" 텍스트 그리기
-            try {
-                const font = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
-                const fontSize = Math.min(pdfHeight * 0.6, 14);
-                page.drawText('***', {
-                    x: pdfX + (pdfWidth / 2) - 10,
-                    y: pdfY + (pdfHeight / 2) - (fontSize / 2),
-                    size: fontSize,
-                    font: font,
-                    color: rgb(0.6, 0.6, 0.6),
+                // 이미지를 페이지 전체에 그리기
+                newPage.drawImage(image, {
+                    x: 0,
+                    y: 0,
+                    width: viewport.width,
+                    height: viewport.height,
                 });
-            } catch (fontError) {
-                console.warn('폰트 오류:', fontError);
+            } else {
+                // 마스킹이 필요 없는 페이지: 원본 복사
+                const originalPdfDoc = await PDFDocument.load(this.state.arrayBuffer.slice(0));
+                const [copiedPage] = await newPdfDoc.copyPages(originalPdfDoc, [pageNum - 1]);
+                newPdfDoc.addPage(copiedPage);
             }
         }
 
-        return await pdfDoc.save();
+        return await newPdfDoc.save();
+    },
+
+    /**
+     * 페이지를 마스킹 적용된 이미지로 렌더링
+     */
+    async renderPageAsImage(pageNum) {
+        const page = await this.state.pdfDoc.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 2.0 }); // 고해상도로 렌더링
+
+        // 캔버스 생성
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+
+        // 흰색 배경
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // PDF 페이지 렌더링
+        await page.render({
+            canvasContext: ctx,
+            viewport: viewport
+        }).promise;
+
+        // 해당 페이지의 마스킹 영역에 흰색 박스 그리기
+        const pageRegions = this.state.selectedRegions.filter(r => r.page === pageNum);
+        ctx.fillStyle = 'white';
+
+        for (const region of pageRegions) {
+            // 스케일 보정 (region은 미리보기 스케일 기준, 렌더링은 2.0 스케일)
+            const renderScale = 2.0;
+            const scaleFactor = renderScale / region.scale;
+
+            const x = region.x * scaleFactor;
+            const y = region.y * scaleFactor;
+            const width = region.width * scaleFactor;
+            const height = region.height * scaleFactor;
+
+            // 흰색 박스 (테두리 없음, 텍스트 없음)
+            ctx.fillRect(x, y, width, height);
+        }
+
+        // PNG 이미지로 변환
+        return new Promise((resolve) => {
+            canvas.toBlob((blob) => {
+                blob.arrayBuffer().then(buffer => {
+                    resolve(new Uint8Array(buffer));
+                });
+            }, 'image/png', 1.0);
+        });
     },
 
     /**
