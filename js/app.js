@@ -2082,6 +2082,14 @@ const App = {
                                         <span class="text-xs text-gray-400">(PDF 파일만 적용)</span>
                                     </label>
                                 </div>
+                                <!-- PDF 수동 마스킹 버튼 -->
+                                <div class="mb-3">
+                                    <label class="px-3 py-2 text-sm bg-orange-50 text-orange-600 rounded cursor-pointer hover:bg-orange-100 inline-flex items-center gap-2 border border-orange-200">
+                                        <i class="fas fa-edit"></i>PDF 영역 직접 선택하여 마스킹
+                                        <input type="file" id="manualMaskingInput" class="hidden" data-applicant-id="${applicant.id}" accept=".pdf">
+                                    </label>
+                                    <span class="text-xs text-gray-400 ml-2">PDF에서 마스킹할 영역을 직접 선택</span>
+                                </div>
                                 <!-- 드래그앤드롭 영역 (관리자용) -->
                                 <div id="dropZone" class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-primary-400 transition-colors cursor-pointer" data-applicant-id="${applicant.id}">
                                     <i class="fas fa-cloud-upload-alt text-2xl text-gray-400 mb-2"></i>
@@ -2305,6 +2313,44 @@ const App = {
                 await Storage.viewPdfInBrowser(link.dataset.path);
             };
         });
+
+        // PDF 수동 마스킹 업로드
+        const manualMaskingInput = document.getElementById('manualMaskingInput');
+        if (manualMaskingInput) {
+            manualMaskingInput.onchange = async () => {
+                const files = Array.from(manualMaskingInput.files);
+                if (files.length > 0 && files[0].type === 'application/pdf') {
+                    const file = files[0];
+                    const visibility = getSelectedVisibility();
+
+                    // 수동 마스킹 모달 열기
+                    PdfManualMasking.openMaskingModal(file, async (maskedFile, maskedCount) => {
+                        // 마스킹 완료 후 업로드
+                        this.showLoading(true);
+                        const result = await Storage.uploadFile(applicant.id, maskedFile, visibility, false);
+                        this.showLoading(false);
+
+                        if (result.success) {
+                            alert(`마스킹 처리된 PDF가 업로드되었습니다.\n(${maskedCount}개 영역 마스킹)`);
+
+                            // 지원자 정보 다시 로드
+                            const updated = await DB.getApplicant(applicant.id);
+                            if (updated.success) {
+                                this.showApplicantDetailModal(updated.data);
+                            }
+                        } else {
+                            alert('파일 업로드에 실패했습니다: ' + result.error);
+                        }
+                    });
+
+                    // 입력 초기화
+                    manualMaskingInput.value = '';
+                } else if (files.length > 0) {
+                    alert('PDF 파일만 수동 마스킹이 가능합니다.');
+                    manualMaskingInput.value = '';
+                }
+            };
+        }
 
         // 첨부파일 다운로드 버튼
         document.querySelectorAll('.attachment-download-btn').forEach(btn => {
