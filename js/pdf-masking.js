@@ -43,12 +43,16 @@ const PdfMasking = {
             }
 
             // 파일을 ArrayBuffer로 변환
-            const arrayBuffer = await file.arrayBuffer();
-            console.log('[PDF 마스킹] ArrayBuffer 크기:', arrayBuffer.byteLength);
+            const originalArrayBuffer = await file.arrayBuffer();
+            console.log('[PDF 마스킹] ArrayBuffer 크기:', originalArrayBuffer.byteLength);
+
+            // ArrayBuffer 복사 (pdf.js와 pdf-lib에서 각각 사용하기 위해)
+            const arrayBufferForPdfJs = originalArrayBuffer.slice(0);
+            const arrayBufferForPdfLib = originalArrayBuffer.slice(0);
 
             // 1. PDF.js로 텍스트 및 위치 정보 추출
             console.log('[PDF 마스킹] 텍스트 추출 시작...');
-            const textItems = await this.extractTextWithPositions(arrayBuffer);
+            const textItems = await this.extractTextWithPositions(arrayBufferForPdfJs);
             console.log('[PDF 마스킹] 추출된 텍스트 항목 수:', textItems.length);
 
             // 추출된 텍스트 샘플 출력 (처음 20개)
@@ -67,8 +71,8 @@ const PdfMasking = {
 
             console.log('[PDF 마스킹] 마스킹할 항목:', itemsToMask.map(i => ({ text: i.text, reason: i.reason })));
 
-            // 3. pdf-lib로 마스킹 처리
-            const maskedPdfBytes = await this.applyMasking(arrayBuffer, itemsToMask);
+            // 3. pdf-lib로 마스킹 처리 (별도 복사본 사용)
+            const maskedPdfBytes = await this.applyMasking(arrayBufferForPdfLib, itemsToMask);
 
             // 4. 새 File 객체 생성
             const maskedFile = new File(
