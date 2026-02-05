@@ -717,8 +717,10 @@ const App = {
                     <option value="name-desc" ${this.state.sortBy.field === 'name' && this.state.sortBy.order === 'desc' ? 'selected' : ''}>이름순 (역순)</option>
                     <option value="status-asc" ${this.state.sortBy.field === 'status' && this.state.sortBy.order === 'asc' ? 'selected' : ''}>상태순 (서류접수→합격)</option>
                     <option value="status-desc" ${this.state.sortBy.field === 'status' && this.state.sortBy.order === 'desc' ? 'selected' : ''}>상태순 (합격→서류접수)</option>
+                    ${Auth.isAdminOrAbove() ? `
                     <option value="eval_o-desc" ${this.state.sortBy.field === 'eval_o' && this.state.sortBy.order === 'desc' ? 'selected' : ''}>평가 O 많은순</option>
                     <option value="eval_x-desc" ${this.state.sortBy.field === 'eval_x' && this.state.sortBy.order === 'desc' ? 'selected' : ''}>평가 X 많은순</option>
+                    ` : ''}
                 </select>
             </div>
 
@@ -734,11 +736,11 @@ const App = {
                             <th class="px-3 py-2 text-left font-semibold text-gray-600">이메일</th>
                             <th class="px-3 py-2 text-left font-semibold text-gray-600">경력</th>
                             <th class="px-3 py-2 text-left font-semibold text-gray-600">지원일</th>
-                            ${this.state.adminUsers.map(admin => `
+                            ${Auth.isAdminOrAbove() ? this.state.adminUsers.map(admin => `
                                 <th class="px-2 py-2 text-center font-semibold text-gray-600 min-w-16" title="${escapeHtml(admin.email)}">
                                     ${escapeHtml(admin.name)}
                                 </th>
-                            `).join('')}
+                            `).join('') : ''}
                             <th class="px-3 py-2 text-left font-semibold text-gray-600">상태</th>
                             <th class="px-3 py-2 text-left font-semibold text-gray-600">관리</th>
                         </tr>
@@ -754,7 +756,7 @@ const App = {
                                 <td class="px-3 py-2 text-gray-600">${escapeHtml(a.email) || '-'}</td>
                                 <td class="px-3 py-2 text-gray-600">${escapeHtml(a.experience) || '-'}</td>
                                 <td class="px-3 py-2 text-gray-600">${a.applied_at || '-'}</td>
-                                ${this.state.adminUsers.map(admin => {
+                                ${Auth.isAdminOrAbove() ? this.state.adminUsers.map(admin => {
                                     const evalKey = `${a.id}_${admin.id}`;
                                     const evalValue = this.state.evaluations[evalKey];
                                     return `
@@ -771,7 +773,7 @@ const App = {
                                             </div>
                                         </td>
                                     `;
-                                }).join('')}
+                                }).join('') : ''}
                                 <td class="px-3 py-2">
                                     <select class="applicant-status-select text-xs border rounded px-2 py-1" data-applicant-id="${a.id}">
                                         <option value="received" ${a.status === 'received' ? 'selected' : ''}>서류접수</option>
@@ -798,7 +800,7 @@ const App = {
                             </tr>
                         `).join('') : `
                             <tr>
-                                <td colspan="${8 + this.state.adminUsers.length}" class="px-4 py-8 text-center text-gray-500">
+                                <td colspan="${8 + (Auth.isAdminOrAbove() ? this.state.adminUsers.length : 0)}" class="px-4 py-8 text-center text-gray-500">
                                     지원자가 없습니다. 엑셀 파일을 업로드하거나 직접 추가하세요.
                                 </td>
                             </tr>
