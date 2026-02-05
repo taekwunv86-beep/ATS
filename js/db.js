@@ -533,11 +533,19 @@ const DB = {
     // =====================================================
 
     // 첨부파일 메타데이터 생성
+    // visibility: 'all' (모든 사용자) 또는 'admin_only' (관리자/슈퍼관리자만)
     async createAttachment(attachmentData) {
         try {
+            // visibility와 uploaded_by 기본값 설정
+            const dataWithDefaults = {
+                ...attachmentData,
+                visibility: attachmentData.visibility || 'all',
+                uploaded_by: Auth.currentUser?.id
+            };
+
             const { data, error } = await supabaseClient
                 .from('attachments')
-                .insert(attachmentData)
+                .insert(dataWithDefaults)
                 .select()
                 .single();
 

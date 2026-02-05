@@ -11,8 +11,14 @@ const Storage = {
     // =====================================================
 
     // 단일 파일 업로드
-    async uploadFile(applicantId, file) {
+    // visibility: 'all' (모든 사용자) 또는 'admin_only' (관리자/슈퍼관리자만)
+    async uploadFile(applicantId, file, visibility = 'all') {
         try {
+            // 권한 체크: 관리자/슈퍼관리자만 업로드 가능
+            if (!Auth.isAdminOrAbove()) {
+                throw new Error('파일 업로드 권한이 없습니다. 관리자만 업로드할 수 있습니다.');
+            }
+
             // 파일 경로 생성 (applicantId/timestamp_randomId.ext)
             // Supabase Storage는 한글 경로를 지원하지 않으므로 영문으로 변환
             const timestamp = Date.now();
@@ -37,13 +43,14 @@ const Storage = {
             const fileSize = this.formatFileSize(file.size);
             const fileType = this.getFileType(file.name, file.type);
 
-            // 첨부파일 메타데이터 DB에 저장
+            // 첨부파일 메타데이터 DB에 저장 (visibility 포함)
             const attachmentResult = await DB.createAttachment({
                 applicant_id: applicantId,
                 file_name: file.name,
                 file_type: fileType,
                 file_size: fileSize,
-                storage_path: data.path
+                storage_path: data.path,
+                visibility: visibility
             });
 
             if (!attachmentResult.success) {
@@ -63,14 +70,15 @@ const Storage = {
     },
 
     // 여러 파일 업로드
-    async uploadFiles(applicantId, files) {
+    // visibility: 'all' (모든 사용자) 또는 'admin_only' (관리자/슈퍼관리자만)
+    async uploadFiles(applicantId, files, visibility = 'all') {
         const results = {
             success: [],
             failed: []
         };
 
         for (const file of files) {
-            const result = await this.uploadFile(applicantId, file);
+            const result = await this.uploadFile(applicantId, file, visibility);
             if (result.success) {
                 results.success.push(result.data);
             } else {

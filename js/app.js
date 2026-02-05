@@ -149,7 +149,17 @@ const App = {
         try {
             // 지원자 로드
             const result = await DB.getApplicants(postingId);
-            this.state.applicants = result.data || [];
+            let applicants = result.data || [];
+
+            // 일반 사용자인 경우 '서류접수', '서류심사', '불합격' 상태 지원자 필터링
+            // (DB RLS에서도 필터링하지만, 프론트엔드에서도 안전하게 필터링)
+            if (!Auth.isAdminOrAbove()) {
+                applicants = applicants.filter(a =>
+                    !['received', 'reviewing', 'failed'].includes(a.status)
+                );
+            }
+
+            this.state.applicants = applicants;
 
             // 관리자 목록 로드
             const adminResult = await DB.getAdminUsers();
@@ -2042,22 +2052,39 @@ const App = {
                         <div class="mt-6">
                             <div class="flex items-center justify-between mb-3">
                                 <h4 class="font-semibold text-gray-700">첨부파일</h4>
-                                <label class="px-3 py-1 text-sm bg-primary-50 text-primary-600 rounded cursor-pointer hover:bg-primary-100">
-                                    <i class="fas fa-upload mr-1"></i>파일 추가
-                                    <input type="file" id="attachmentInput" class="hidden" data-applicant-id="${applicant.id}" accept=".pdf,.doc,.docx,.hwp,.jpg,.png" multiple>
-                                </label>
+                                ${Auth.isAdminOrAbove() ? `
+                                    <label class="px-3 py-1 text-sm bg-primary-50 text-primary-600 rounded cursor-pointer hover:bg-primary-100">
+                                        <i class="fas fa-upload mr-1"></i>파일 추가
+                                        <input type="file" id="attachmentInput" class="hidden" data-applicant-id="${applicant.id}" accept=".pdf,.doc,.docx,.hwp,.jpg,.png" multiple>
+                                    </label>
+                                ` : ''}
                             </div>
-                            <!-- 드래그앤드롭 영역 -->
-                            <div id="dropZone" class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-primary-400 transition-colors cursor-pointer" data-applicant-id="${applicant.id}">
-                                <i class="fas fa-cloud-upload-alt text-2xl text-gray-400 mb-2"></i>
-                                <p class="text-sm text-gray-500">파일을 여기에 드래그하거나 클릭하여 업로드</p>
-                                <input type="file" id="dropZoneInput" class="hidden" accept=".pdf,.doc,.docx,.hwp,.jpg,.png" multiple>
-                            </div>
+                            ${Auth.isAdminOrAbove() ? `
+                                <!-- 파일 공개범위 선택 (관리자용) -->
+                                <div class="mb-3 flex items-center gap-3">
+                                    <span class="text-sm text-gray-600">파일 공개범위:</span>
+                                    <label class="flex items-center gap-1 cursor-pointer">
+                                        <input type="radio" name="fileVisibility" value="all" checked class="text-primary-500">
+                                        <span class="text-sm">전체 공개</span>
+                                    </label>
+                                    <label class="flex items-center gap-1 cursor-pointer">
+                                        <input type="radio" name="fileVisibility" value="admin_only" class="text-primary-500">
+                                        <span class="text-sm text-purple-600"><i class="fas fa-lock text-xs mr-1"></i>관리자 전용</span>
+                                    </label>
+                                </div>
+                                <!-- 드래그앤드롭 영역 (관리자용) -->
+                                <div id="dropZone" class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-primary-400 transition-colors cursor-pointer" data-applicant-id="${applicant.id}">
+                                    <i class="fas fa-cloud-upload-alt text-2xl text-gray-400 mb-2"></i>
+                                    <p class="text-sm text-gray-500">파일을 여기에 드래그하거나 클릭하여 업로드</p>
+                                    <input type="file" id="dropZoneInput" class="hidden" accept=".pdf,.doc,.docx,.hwp,.jpg,.png" multiple>
+                                </div>
+                            ` : ''}
                             <div class="mt-3 space-y-2" id="attachmentList">
                                 ${attachments.length ? attachments.map(att => {
                                     const isPdf = Storage.isPdf(att.file_name);
+                                    const isAdminOnly = att.visibility === 'admin_only';
                                     return `
-                                    <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                    <div class="flex items-center justify-between p-2 ${isAdminOnly ? 'bg-purple-50' : 'bg-gray-50'} rounded">
                                         <div class="flex items-center gap-2 flex-1">
                                             <i class="fas ${Storage.getFileIcon(att.file_type)}"></i>
                                             ${isPdf ? `
@@ -2066,6 +2093,7 @@ const App = {
                                                 <span class="text-sm">${escapeHtml(att.file_name)}</span>
                                             `}
                                             <span class="text-xs text-gray-400">(${escapeHtml(att.file_size)})</span>
+                                            ${isAdminOnly ? '<span class="text-xs text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded"><i class="fas fa-lock text-xs mr-1"></i>관리자</span>' : ''}
                                         </div>
                                         <div class="flex items-center gap-2">
                                             ${isPdf ? `
@@ -2076,9 +2104,11 @@ const App = {
                                             <button class="attachment-download-btn text-blue-500 hover:text-blue-700 p-1" data-path="${escapeHtml(att.storage_path)}" data-name="${escapeHtml(att.file_name)}" title="다운로드">
                                                 <i class="fas fa-download text-sm"></i>
                                             </button>
-                                            <button class="delete-attachment-btn text-red-500 hover:text-red-700 p-1" data-id="${att.id}" data-path="${escapeHtml(att.storage_path)}" title="삭제">
-                                                <i class="fas fa-trash text-sm"></i>
-                                            </button>
+                                            ${Auth.isAdminOrAbove() ? `
+                                                <button class="delete-attachment-btn text-red-500 hover:text-red-700 p-1" data-id="${att.id}" data-path="${escapeHtml(att.storage_path)}" title="삭제">
+                                                    <i class="fas fa-trash text-sm"></i>
+                                                </button>
+                                            ` : ''}
                                         </div>
                                     </div>
                                 `}).join('') : '<p class="text-sm text-gray-400 text-center py-2">첨부된 파일이 없습니다.</p>'}
@@ -2122,14 +2152,21 @@ const App = {
 
         document.getElementById('closeDetailModal').onclick = () => modal.innerHTML = '';
 
+        // 선택된 visibility 가져오기 헬퍼 함수
+        const getSelectedVisibility = () => {
+            const checkedRadio = document.querySelector('input[name="fileVisibility"]:checked');
+            return checkedRadio ? checkedRadio.value : 'all';
+        };
+
         // 첨부파일 업로드
         const attachmentInput = document.getElementById('attachmentInput');
         if (attachmentInput) {
             attachmentInput.onchange = async () => {
                 const files = Array.from(attachmentInput.files);
                 if (files.length > 0) {
+                    const visibility = getSelectedVisibility();
                     this.showLoading(true);
-                    const result = await Storage.uploadFiles(applicant.id, files);
+                    const result = await Storage.uploadFiles(applicant.id, files, visibility);
                     this.showLoading(false);
 
                     if (result.successCount > 0) {
@@ -2143,7 +2180,8 @@ const App = {
                     if (result.failedCount > 0) {
                         alert(`${result.successCount}개 파일 업로드 완료, ${result.failedCount}개 파일 실패`);
                     } else {
-                        alert(`${result.successCount}개의 파일이 추가되었습니다.`);
+                        const visibilityText = visibility === 'admin_only' ? ' (관리자 전용)' : '';
+                        alert(`${result.successCount}개의 파일이 추가되었습니다.${visibilityText}`);
                     }
                 }
             };
@@ -2161,8 +2199,9 @@ const App = {
             dropZoneInput.onchange = async () => {
                 const files = Array.from(dropZoneInput.files);
                 if (files.length > 0) {
+                    const visibility = getSelectedVisibility();
                     this.showLoading(true);
-                    const result = await Storage.uploadFiles(applicant.id, files);
+                    const result = await Storage.uploadFiles(applicant.id, files, visibility);
                     this.showLoading(false);
 
                     if (result.successCount > 0) {
@@ -2171,7 +2210,8 @@ const App = {
                             this.showApplicantDetailModal(updated.data);
                         }
                     }
-                    alert(`${result.successCount}개 파일 업로드 완료${result.failedCount > 0 ? `, ${result.failedCount}개 실패` : ''}`);
+                    const visibilityText = visibility === 'admin_only' ? ' (관리자 전용)' : '';
+                    alert(`${result.successCount}개 파일 업로드 완료${visibilityText}${result.failedCount > 0 ? `, ${result.failedCount}개 실패` : ''}`);
                 }
             };
 
@@ -2192,8 +2232,9 @@ const App = {
 
                 const files = Array.from(e.dataTransfer.files);
                 if (files.length > 0) {
+                    const visibility = getSelectedVisibility();
                     this.showLoading(true);
-                    const result = await Storage.uploadFiles(applicant.id, files);
+                    const result = await Storage.uploadFiles(applicant.id, files, visibility);
                     this.showLoading(false);
 
                     if (result.successCount > 0) {
@@ -2202,7 +2243,8 @@ const App = {
                             this.showApplicantDetailModal(updated.data);
                         }
                     }
-                    alert(`${result.successCount}개 파일 업로드 완료${result.failedCount > 0 ? `, ${result.failedCount}개 실패` : ''}`);
+                    const visibilityText = visibility === 'admin_only' ? ' (관리자 전용)' : '';
+                    alert(`${result.successCount}개 파일 업로드 완료${visibilityText}${result.failedCount > 0 ? `, ${result.failedCount}개 실패` : ''}`);
                 }
             };
         }
