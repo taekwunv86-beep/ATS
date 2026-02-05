@@ -4,15 +4,16 @@
 // =====================================================
 
 const PdfMasking = {
-    // 연봉 관련 패턴 정규식
+    // 연봉 관련 패턴 정규식 (연봉 키워드가 포함된 경우만)
     SALARY_PATTERNS: [
-        // 한글 패턴
-        /(?:연봉|년봉|희망\s*연봉|현재\s*연봉|예상\s*연봉|희망\s*급여|현재\s*급여|급여|월급|월봉)[\s:：\-~]*[\d,\.]+\s*(?:만원|만|원|천만원|천만)?/gi,
-        // 숫자 + 단위 패턴 (연봉 근처)
-        /[\d,]+\s*(?:만원|천만원)/gi,
+        // 한글 패턴 - 연봉/급여 키워드 + 숫자
+        /(?:연봉|년봉|희망\s*연봉|현재\s*연봉|예상\s*연봉|희망\s*급여|현재\s*급여|월급|월봉)[\s:：\-~]*[\d,\.]+\s*(?:만원|만|원|천만원|천만)?/gi,
         // 영문 패턴
-        /(?:salary|annual\s*salary|expected\s*salary|current\s*salary|pay)[\s:：\-~]*[\d,\.]+/gi,
+        /(?:salary|annual\s*salary|expected\s*salary|current\s*salary)[\s:：\-~]*[\d,\.]+/gi,
     ],
+
+    // 제외할 키워드 (이 키워드가 포함된 텍스트는 마스킹하지 않음)
+    EXCLUDE_KEYWORDS: ['성과', '매출', '실적', '목표', '달성', '수익', '이익', '비용', '예산', '투자'],
 
     // 연봉 키워드 (근처에 숫자가 있으면 마스킹)
     SALARY_KEYWORDS: [
@@ -128,6 +129,15 @@ const PdfMasking = {
     /**
      * 연봉 관련 텍스트 항목 찾기
      */
+    /**
+     * 제외 키워드 포함 여부 확인
+     */
+    hasExcludeKeyword(text) {
+        return this.EXCLUDE_KEYWORDS.some(kw =>
+            text.toLowerCase().includes(kw.toLowerCase())
+        );
+    },
+
     findSalaryItems(textItems) {
         const itemsToMask = [];
         const processedIndices = new Set();
@@ -138,6 +148,12 @@ const PdfMasking = {
 
             const item = textItems[i];
             const text = item.text;
+
+            // 제외 키워드가 포함된 경우 스킵
+            if (this.hasExcludeKeyword(text)) {
+                console.log('[PDF 마스킹] 제외 키워드 포함으로 스킵:', text);
+                continue;
+            }
 
             // 1. 직접 패턴 매칭
             for (const pattern of this.SALARY_PATTERNS) {
@@ -176,8 +192,21 @@ const PdfMasking = {
                         // 같은 페이지가 아니면 스킵
                         if (nearItem.page !== item.page) continue;
 
+                        // 제외 키워드가 포함된 경우 스킵
+                        if (this.hasExcludeKeyword(nearItem.text)) continue;
+
                         // y 좌표가 비슷한 경우 (같은 줄) - 허용 오차 20px
                         const isSameRow = Math.abs(nearItem.y - item.y) < 20;
+
+                        // 같은 줄에 제외 키워드가 있는지 확인
+                        const rowItems = textItems.filter(t =>
+                            t.page === item.page && Math.abs(t.y - item.y) < 20
+                        );
+                        const rowHasExcludeKeyword = rowItems.some(t => this.hasExcludeKeyword(t.text));
+                        if (rowHasExcludeKeyword) {
+                            console.log('[PDF 마스킹] 같은 줄에 제외 키워드 있음, 스킵');
+                            continue;
+                        }
 
                         // 숫자가 포함되어 있고 금액 관련 패턴인 경우
                         const hasNumber = /[\d,]+/.test(nearItem.text);
