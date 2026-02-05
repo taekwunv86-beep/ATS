@@ -15,7 +15,12 @@ const PdfMasking = {
     ],
 
     // 연봉 키워드 (근처에 숫자가 있으면 마스킹)
-    SALARY_KEYWORDS: ['연봉', '년봉', '급여', '월급', '월봉', 'salary', 'pay'],
+    SALARY_KEYWORDS: [
+        '연봉', '년봉', '급여', '월급', '월봉',
+        '희망연봉', '현재연봉', '예상연봉', '희망급여', '현재급여',
+        '희망 연봉', '현재 연봉', '예상 연봉', '희망 급여', '현재 급여',
+        'salary', 'pay', 'annual salary', 'expected salary'
+    ],
 
     /**
      * PDF 파일에서 연봉 정보를 마스킹
@@ -129,7 +134,7 @@ const PdfMasking = {
                 }
             }
 
-            // 2. 키워드 + 근처 숫자 탐지
+            // 2. 키워드 + 근처 숫자 탐지 (표 형태 지원)
             if (!processedIndices.has(i)) {
                 const hasKeyword = this.SALARY_KEYWORDS.some(kw =>
                     text.toLowerCase().includes(kw.toLowerCase())
@@ -143,15 +148,25 @@ const PdfMasking = {
                     });
                     processedIndices.add(i);
 
-                    // 근처 항목들 중 숫자가 포함된 것 찾기 (같은 페이지, y 좌표 유사)
-                    for (let j = i + 1; j < Math.min(i + 5, textItems.length); j++) {
-                        if (processedIndices.has(j)) continue;
+                    // 같은 페이지, 같은 줄(y 좌표 유사)의 모든 항목 검색
+                    // 표 형태에서 열이 떨어져 있어도 찾을 수 있도록 전체 검색
+                    for (let j = 0; j < textItems.length; j++) {
+                        if (processedIndices.has(j) || j === i) continue;
 
                         const nearItem = textItems[j];
-                        if (nearItem.page !== item.page) break;
 
-                        // y 좌표가 비슷하고 (같은 줄) 숫자가 포함된 경우
-                        if (Math.abs(nearItem.y - item.y) < 15 && /[\d,]+/.test(nearItem.text)) {
+                        // 같은 페이지가 아니면 스킵
+                        if (nearItem.page !== item.page) continue;
+
+                        // y 좌표가 비슷한 경우 (같은 줄) - 허용 오차 20px
+                        const isSameRow = Math.abs(nearItem.y - item.y) < 20;
+
+                        // 숫자가 포함되어 있고 금액 관련 패턴인 경우
+                        const hasNumber = /[\d,]+/.test(nearItem.text);
+                        const hasMoneyUnit = /만원|천만|원|만/.test(nearItem.text);
+                        const isLikelyAmount = /^[\d,\.]+\s*(?:만원|천만원|만|원)?$/.test(nearItem.text.trim());
+
+                        if (isSameRow && hasNumber && (hasMoneyUnit || isLikelyAmount)) {
                             itemsToMask.push({
                                 ...nearItem,
                                 reason: 'nearby_number'
