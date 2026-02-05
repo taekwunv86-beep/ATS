@@ -2072,6 +2072,16 @@ const App = {
                                         <span class="text-sm text-purple-600"><i class="fas fa-lock text-xs mr-1"></i>관리자 전용</span>
                                     </label>
                                 </div>
+                                <!-- PDF 연봉 정보 마스킹 옵션 -->
+                                <div class="mb-3 flex items-center gap-2">
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" id="maskSalaryCheckbox" class="w-4 h-4 text-orange-500 rounded">
+                                        <span class="text-sm text-orange-600">
+                                            <i class="fas fa-user-shield text-xs mr-1"></i>PDF 연봉 정보 자동 마스킹
+                                        </span>
+                                        <span class="text-xs text-gray-400">(PDF 파일만 적용)</span>
+                                    </label>
+                                </div>
                                 <!-- 드래그앤드롭 영역 (관리자용) -->
                                 <div id="dropZone" class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-primary-400 transition-colors cursor-pointer" data-applicant-id="${applicant.id}">
                                     <i class="fas fa-cloud-upload-alt text-2xl text-gray-400 mb-2"></i>
@@ -2158,6 +2168,30 @@ const App = {
             return checkedRadio ? checkedRadio.value : 'all';
         };
 
+        // 연봉 마스킹 옵션 가져오기 헬퍼 함수
+        const getMaskSalaryOption = () => {
+            const checkbox = document.getElementById('maskSalaryCheckbox');
+            return checkbox ? checkbox.checked : false;
+        };
+
+        // 업로드 결과 메시지 생성 헬퍼 함수
+        const getUploadResultMessage = (result, visibility, maskSalary) => {
+            let message = `${result.successCount}개의 파일이 추가되었습니다.`;
+
+            if (visibility === 'admin_only') {
+                message += ' (관리자 전용)';
+            }
+
+            if (maskSalary && result.maskedFiles && result.maskedFiles.length > 0) {
+                const maskedInfo = result.maskedFiles.map(f =>
+                    `${f.fileName}: ${f.maskedCount}건`
+                ).join(', ');
+                message += `\n\n연봉 정보 마스킹: ${maskedInfo}`;
+            }
+
+            return message;
+        };
+
         // 첨부파일 업로드
         const attachmentInput = document.getElementById('attachmentInput');
         if (attachmentInput) {
@@ -2165,8 +2199,9 @@ const App = {
                 const files = Array.from(attachmentInput.files);
                 if (files.length > 0) {
                     const visibility = getSelectedVisibility();
+                    const maskSalary = getMaskSalaryOption();
                     this.showLoading(true);
-                    const result = await Storage.uploadFiles(applicant.id, files, visibility);
+                    const result = await Storage.uploadFiles(applicant.id, files, visibility, maskSalary);
                     this.showLoading(false);
 
                     if (result.successCount > 0) {
@@ -2180,8 +2215,7 @@ const App = {
                     if (result.failedCount > 0) {
                         alert(`${result.successCount}개 파일 업로드 완료, ${result.failedCount}개 파일 실패`);
                     } else {
-                        const visibilityText = visibility === 'admin_only' ? ' (관리자 전용)' : '';
-                        alert(`${result.successCount}개의 파일이 추가되었습니다.${visibilityText}`);
+                        alert(getUploadResultMessage(result, visibility, maskSalary));
                     }
                 }
             };
@@ -2200,8 +2234,9 @@ const App = {
                 const files = Array.from(dropZoneInput.files);
                 if (files.length > 0) {
                     const visibility = getSelectedVisibility();
+                    const maskSalary = getMaskSalaryOption();
                     this.showLoading(true);
-                    const result = await Storage.uploadFiles(applicant.id, files, visibility);
+                    const result = await Storage.uploadFiles(applicant.id, files, visibility, maskSalary);
                     this.showLoading(false);
 
                     if (result.successCount > 0) {
@@ -2210,8 +2245,11 @@ const App = {
                             this.showApplicantDetailModal(updated.data);
                         }
                     }
-                    const visibilityText = visibility === 'admin_only' ? ' (관리자 전용)' : '';
-                    alert(`${result.successCount}개 파일 업로드 완료${visibilityText}${result.failedCount > 0 ? `, ${result.failedCount}개 실패` : ''}`);
+                    if (result.failedCount > 0) {
+                        alert(`${result.successCount}개 파일 업로드 완료, ${result.failedCount}개 실패`);
+                    } else {
+                        alert(getUploadResultMessage(result, visibility, maskSalary));
+                    }
                 }
             };
 
@@ -2233,8 +2271,9 @@ const App = {
                 const files = Array.from(e.dataTransfer.files);
                 if (files.length > 0) {
                     const visibility = getSelectedVisibility();
+                    const maskSalary = getMaskSalaryOption();
                     this.showLoading(true);
-                    const result = await Storage.uploadFiles(applicant.id, files, visibility);
+                    const result = await Storage.uploadFiles(applicant.id, files, visibility, maskSalary);
                     this.showLoading(false);
 
                     if (result.successCount > 0) {
@@ -2243,8 +2282,11 @@ const App = {
                             this.showApplicantDetailModal(updated.data);
                         }
                     }
-                    const visibilityText = visibility === 'admin_only' ? ' (관리자 전용)' : '';
-                    alert(`${result.successCount}개 파일 업로드 완료${visibilityText}${result.failedCount > 0 ? `, ${result.failedCount}개 실패` : ''}`);
+                    if (result.failedCount > 0) {
+                        alert(`${result.successCount}개 파일 업로드 완료, ${result.failedCount}개 실패`);
+                    } else {
+                        alert(getUploadResultMessage(result, visibility, maskSalary));
+                    }
                 }
             };
         }

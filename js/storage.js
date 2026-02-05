@@ -12,11 +12,34 @@ const Storage = {
 
     // 단일 파일 업로드
     // visibility: 'all' (모든 사용자) 또는 'admin_only' (관리자/슈퍼관리자만)
-    async uploadFile(applicantId, file, visibility = 'all') {
+    // maskSalary: true이면 PDF의 연봉 정보를 마스킹
+    async uploadFile(applicantId, file, visibility = 'all', maskSalary = false) {
         try {
             // 권한 체크: 관리자/슈퍼관리자만 업로드 가능
             if (!Auth.isAdminOrAbove()) {
                 throw new Error('파일 업로드 권한이 없습니다. 관리자만 업로드할 수 있습니다.');
+            }
+
+            let fileToUpload = file;
+            let wasMasked = false;
+            let maskedCount = 0;
+
+            // PDF 파일이고 마스킹 옵션이 활성화된 경우
+            if (maskSalary && window.PdfMasking && PdfMasking.isPdf(file)) {
+                try {
+                    console.log('PDF 연봉 정보 마스킹 처리 중...');
+                    const maskResult = await PdfMasking.maskSalaryInfo(file);
+                    fileToUpload = maskResult.file;
+                    wasMasked = maskResult.masked;
+                    maskedCount = maskResult.maskedCount;
+
+                    if (wasMasked) {
+                        console.log(`연봉 정보 ${maskedCount}개 마스킹 완료`);
+                    }
+                } catch (maskError) {
+                    console.error('PDF 마스킹 오류 (원본 파일로 계속):', maskError);
+                    // 마스킹 실패 시 원본 파일로 업로드 진행
+                }
             }
 
             // 파일 경로 생성 (applicantId/timestamp_randomId.ext)
@@ -29,7 +52,7 @@ const Storage = {
             // Supabase Storage에 업로드
             const { data, error } = await supabaseClient.storage
                 .from(this.BUCKET_NAME)
-                .upload(filePath, file, {
+                .upload(filePath, fileToUpload, {
                     cacheControl: '3600',
                     upsert: false
                 });
@@ -40,7 +63,7 @@ const Storage = {
             }
 
             // 파일 메타데이터 생성
-            const fileSize = this.formatFileSize(file.size);
+            const fileSize = this.formatFileSize(fileToUpload.size);
             const fileType = this.getFileType(file.name, file.type);
 
             // 첨부파일 메타데이터 DB에 저장 (visibility 포함)
@@ -61,7 +84,9 @@ const Storage = {
 
             return {
                 success: true,
-                data: attachmentResult.data
+                data: attachmentResult.data,
+                wasMasked: wasMasked,
+                maskedCount: maskedCount
             };
         } catch (err) {
             console.error('파일 업로드 실패:', err);
@@ -71,16 +96,24 @@ const Storage = {
 
     // 여러 파일 업로드
     // visibility: 'all' (모든 사용자) 또는 'admin_only' (관리자/슈퍼관리자만)
-    async uploadFiles(applicantId, files, visibility = 'all') {
+    // maskSalary: true이면 PDF의 연봉 정보를 마스킹
+    async uploadFiles(applicantId, files, visibility = 'all', maskSalary = false) {
         const results = {
             success: [],
-            failed: []
+            failed: [],
+            maskedFiles: []
         };
 
         for (const file of files) {
-            const result = await this.uploadFile(applicantId, file, visibility);
+            const result = await this.uploadFile(applicantId, file, visibility, maskSalary);
             if (result.success) {
                 results.success.push(result.data);
+                if (result.wasMasked) {
+                    results.maskedFiles.push({
+                        fileName: file.name,
+                        maskedCount: result.maskedCount
+                    });
+                }
             } else {
                 results.failed.push({
                     fileName: file.name,
@@ -93,7 +126,8 @@ const Storage = {
             successCount: results.success.length,
             failedCount: results.failed.length,
             success: results.success,
-            failed: results.failed
+            failed: results.failed,
+            maskedFiles: results.maskedFiles
         };
     },
 
