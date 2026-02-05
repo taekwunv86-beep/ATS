@@ -430,11 +430,14 @@ const PdfManualMasking = {
                 { type: 'application/pdf' }
             );
 
+            // 콜백 호출 전에 카운트 저장 (closeModal에서 초기화되므로)
+            const maskedCount = this.state.selectedRegions.length;
+
             this.closeModal();
 
             // 콜백 호출
             if (this.onComplete) {
-                this.onComplete(maskedFile, this.state.selectedRegions.length);
+                this.onComplete(maskedFile, maskedCount);
             }
 
         } catch (error) {
