@@ -25,21 +25,29 @@ const Storage = {
             let maskedCount = 0;
 
             // PDF 파일이고 마스킹 옵션이 활성화된 경우
+            console.log('[Storage] maskSalary 옵션:', maskSalary);
+            console.log('[Storage] PdfMasking 존재:', !!window.PdfMasking);
+            console.log('[Storage] isPdf 결과:', window.PdfMasking ? PdfMasking.isPdf(file) : 'N/A');
+
             if (maskSalary && window.PdfMasking && PdfMasking.isPdf(file)) {
                 try {
-                    console.log('PDF 연봉 정보 마스킹 처리 중...');
+                    console.log('[Storage] PDF 연봉 정보 마스킹 처리 시작...');
                     const maskResult = await PdfMasking.maskSalaryInfo(file);
                     fileToUpload = maskResult.file;
                     wasMasked = maskResult.masked;
                     maskedCount = maskResult.maskedCount;
 
+                    console.log('[Storage] 마스킹 결과:', { wasMasked, maskedCount });
+
                     if (wasMasked) {
-                        console.log(`연봉 정보 ${maskedCount}개 마스킹 완료`);
+                        console.log(`[Storage] 연봉 정보 ${maskedCount}개 마스킹 완료`);
                     }
                 } catch (maskError) {
-                    console.error('PDF 마스킹 오류 (원본 파일로 계속):', maskError);
+                    console.error('[Storage] PDF 마스킹 오류 (원본 파일로 계속):', maskError);
                     // 마스킹 실패 시 원본 파일로 업로드 진행
                 }
+            } else {
+                console.log('[Storage] 마스킹 조건 미충족 - 스킵');
             }
 
             // 파일 경로 생성 (applicantId/timestamp_randomId.ext)

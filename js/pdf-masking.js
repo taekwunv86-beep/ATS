@@ -29,7 +29,12 @@ const PdfMasking = {
      */
     async maskSalaryInfo(file) {
         try {
+            console.log('[PDF 마스킹] 시작 - 파일:', file.name);
+
             // PDF.js와 pdf-lib 라이브러리 확인
+            console.log('[PDF 마스킹] pdfjsLib 존재:', !!window.pdfjsLib);
+            console.log('[PDF 마스킹] PDFLib 존재:', !!window.PDFLib);
+
             if (!window.pdfjsLib) {
                 throw new Error('PDF.js 라이브러리가 로드되지 않았습니다.');
             }
@@ -39,19 +44,28 @@ const PdfMasking = {
 
             // 파일을 ArrayBuffer로 변환
             const arrayBuffer = await file.arrayBuffer();
+            console.log('[PDF 마스킹] ArrayBuffer 크기:', arrayBuffer.byteLength);
 
             // 1. PDF.js로 텍스트 및 위치 정보 추출
+            console.log('[PDF 마스킹] 텍스트 추출 시작...');
             const textItems = await this.extractTextWithPositions(arrayBuffer);
+            console.log('[PDF 마스킹] 추출된 텍스트 항목 수:', textItems.length);
+
+            // 추출된 텍스트 샘플 출력 (처음 20개)
+            if (textItems.length > 0) {
+                console.log('[PDF 마스킹] 텍스트 샘플:', textItems.slice(0, 20).map(t => t.text));
+            }
 
             // 2. 연봉 관련 텍스트 찾기
             const itemsToMask = this.findSalaryItems(textItems);
+            console.log('[PDF 마스킹] 마스킹 대상:', itemsToMask.length, '개');
 
             if (itemsToMask.length === 0) {
-                console.log('마스킹할 연봉 정보가 없습니다.');
+                console.log('[PDF 마스킹] 마스킹할 연봉 정보가 없습니다.');
                 return { file, masked: false, maskedCount: 0 };
             }
 
-            console.log(`마스킹할 항목 ${itemsToMask.length}개 발견:`, itemsToMask);
+            console.log('[PDF 마스킹] 마스킹할 항목:', itemsToMask.map(i => ({ text: i.text, reason: i.reason })));
 
             // 3. pdf-lib로 마스킹 처리
             const maskedPdfBytes = await this.applyMasking(arrayBuffer, itemsToMask);
